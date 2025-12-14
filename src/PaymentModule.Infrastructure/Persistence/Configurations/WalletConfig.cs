@@ -8,24 +8,31 @@ public class WalletConfig : IEntityTypeConfiguration<Wallet>
 {
     public void Configure(EntityTypeBuilder<Wallet> builder)
     {
-        builder.ToTable("wallets");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Id).ValueGeneratedOnAdd();
+        builder.ToTable("Wallets");
+        
+        builder.HasKey(w => w.Id);
+        
+        builder.Property(w => w.TenantId)
+            .IsRequired();
+        
+        builder.OwnsOne(w => w.Balance, money =>
+        {
+            money.Property(m => m.Value)
+                .IsRequired()
+                .HasColumnName("Balance");
+            
+            money.Property(m => m.Currency)
+                .IsRequired()
+                .HasMaxLength(3)
+                .HasColumnName("Currency");
+        });
 
-        builder.Property(x => x.TenantId).IsRequired();
+        // Audit fields
+        builder.Property(w => w.CreatedAt).IsRequired();
+        builder.Property(w => w.UpdatedAt);
+        builder.Property(w => w.DeletedAt);
 
-        builder.OwnsOne(x => x.Balance)
-               .Property(m => m.Value)
-               .HasColumnName("balance_value")
-               .HasColumnType("numeric(18,2)")
-               .IsRequired();
-
-        builder.OwnsOne(x => x.Balance)
-               .Property(m => m.Currency)
-               .HasColumnName("balance_currency")
-               .HasMaxLength(3)
-               .IsRequired();
-
-        builder.HasIndex(x => x.TenantId);
+        // Index for multi-tenancy queries
+        builder.HasIndex(w => new { w.TenantId, w.DeletedAt });
     }
 }

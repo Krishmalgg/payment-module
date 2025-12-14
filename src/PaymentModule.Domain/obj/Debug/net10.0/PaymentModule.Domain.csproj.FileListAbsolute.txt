@@ -5,6 +5,7 @@ E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentM
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.AssemblyInfoInputs.cache
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.AssemblyInfo.cs
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.csproj.CoreCompileInputs.cache
+E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.sourcelink.json
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.dll
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\refint\PaymentModule.Domain.dll
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.pdb

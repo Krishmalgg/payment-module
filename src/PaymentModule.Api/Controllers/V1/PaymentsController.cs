@@ -1,33 +1,41 @@
 namespace PaymentModule.Api.Controllers.V1;
 
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using PaymentModule.Domain.Ports;
-using PaymentModule.Domain.ValueObjects;
+using PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent;
 
 [ApiController]
-[Route("api/v1/payments")]
+[Asp.Versioning.ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/payments")]
 public class PaymentsController : ControllerBase
 {
-    private readonly IPaymentGateway _gateway;
+    private readonly IMediator _mediator;
 
-    public PaymentsController(IPaymentGateway gateway)
+    public PaymentsController(IMediator mediator)
     {
-        _gateway = gateway;
+        _mediator = mediator;
     }
 
     [HttpPost("intents")]
-    public async Task<IActionResult> CreateIntent([FromBody] CreateIntentRequest request, CancellationToken ct)
+    public async Task<IActionResult> CreateIntent(
+        [FromBody] CreatePaymentIntentCommand command,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+        CancellationToken ct)
     {
-        var txId = TransactionId.New();
-        var result = await _gateway.CreatePaymentIntent(txId, new Money(request.Amount, request.Currency), request.Metadata, ct);
+        var commandWithKey = command with { IdempotencyKey = idempotencyKey };
+        var result = await _mediator.Send(commandWithKey, ct);
         return Ok(result);
     }
-}
 
-public sealed class CreateIntentRequest
-{
-    public decimal Amount { get; set; }
-    public string Currency { get; set; } = "USD";
-    public Dictionary<string, string>? Metadata { get; set; }
-}
+    [HttpGet("success")]
+    public IActionResult Success([FromQuery] Guid transactionId)
+    {
+        return Ok(new { transactionId, status = "success" });
+    }
 
+    [HttpGet("cancel")]
+    public IActionResult Cancel([FromQuery] Guid transactionId)
+    {
+        return Ok(new { transactionId, status = "cancel" });
+    }
+}
