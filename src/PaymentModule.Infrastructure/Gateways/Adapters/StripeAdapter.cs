@@ -5,15 +5,15 @@ namespace PaymentModule.Infrastructure.Gateways.Adapters;
 
 public class StripeAdapter : IPaymentGateway
 {
-    public Task<object> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct)
+    public Task<PaymentIntentResult> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct)
     {
-        var result = new
-        {
-            gateway = "stripe",
-            configured = false,
-            reason = "missing_api_keys"
-        };
-        return Task.FromResult<object>(result);
+        var result = new PaymentIntentResult(
+            Gateway: "stripe",
+            Action: "error", 
+            Url: "",
+            Fields: new Dictionary<string, string> { { "error", "Not configured" } }
+        );
+        return Task.FromResult(result);
     }
 
     public Task<object> HandleWebhook(string payload, IDictionary<string, string> headers, CancellationToken ct)

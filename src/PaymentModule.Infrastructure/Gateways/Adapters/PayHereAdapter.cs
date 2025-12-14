@@ -17,7 +17,7 @@ public class PayHereAdapter : IPaymentGateway
         _options = options.Value;
     }
 
-    public Task<object> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct)
+    public Task<PaymentIntentResult> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct)
     {
         var orderId = id.Value.ToString("N");
         var amountStr = amount.Value.ToString("0.00", CultureInfo.InvariantCulture);
@@ -38,14 +38,13 @@ public class PayHereAdapter : IPaymentGateway
             ["hash"] = hash
         };
 
-        var result = new
-        {
-            gateway = "payhere",
-            action = "form_post",
-            url = _options.CheckoutUrl,
-            fields
-        };
-        return Task.FromResult<object>(result);
+        var result = new PaymentIntentResult(
+            Gateway: "payhere",
+            Action: "form_post",
+            Url: _options.CheckoutUrl,
+            Fields: fields
+        );
+        return Task.FromResult(result);
     }
 
     public Task<object> HandleWebhook(string payload, IDictionary<string, string> headers, CancellationToken ct)

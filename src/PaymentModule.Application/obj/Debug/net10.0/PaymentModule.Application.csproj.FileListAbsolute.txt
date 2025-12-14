@@ -8,9 +8,9 @@ E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\Pay
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.AssemblyInfoInputs.cache
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.AssemblyInfo.cs
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.csproj.CoreCompileInputs.cache
+E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.sourcelink.json
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentM.2E0B126E.Up2Date
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.dll
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\refint\PaymentModule.Application.dll
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.pdb
 E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\ref\PaymentModule.Application.dll
-E:\projects\payment\back end\src\PaymentModule.Application\obj\Debug\net10.0\PaymentModule.Application.sourcelink.json

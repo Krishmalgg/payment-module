@@ -1,0 +1,10 @@
+2025-12-14 19:06:26.875 +05:30 [INF] Outbox Background Service started
+2025-12-14 19:06:44.340 +05:30 [WRN] Failed to determine the https port for redirect.
+2025-12-14 19:06:45.573 +05:30 [INF] HTTP POST /api/v1/payments/intents responded 200 in 1190.1872 ms
+2025-12-14 19:13:07.705 +05:30 [INF] HTTP POST /api/v1/payments/intents responded 200 in 28.4209 ms
+2025-12-14 19:13:13.307 +05:30 [INF] HTTP POST /api/v1/payments/intents responded 200 in 10.2714 ms
+2025-12-14 19:13:14.882 +05:30 [INF] HTTP POST /api/v1/payments/intents responded 200 in 1.4117 ms
+2025-12-14 19:13:16.490 +05:30 [INF] HTTP POST /api/v1/payments/intents responded 200 in 3.0745 ms
+2025-12-14 19:13:58.510 +05:30 [INF] Outbox Background Service started
+2025-12-14 19:14:06.630 +05:30 [WRN] Failed to determine the https port for redirect.
+2025-12-14 19:14:07.263 +05:30 [INF] HTTP POST /api/v1/payments/intents responded 200 in 608.1047 ms

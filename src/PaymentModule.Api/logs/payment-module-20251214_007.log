@@ -1,0 +1,94 @@
+2025-12-14 19:04:05.006 +05:30 [INF] Outbox Background Service started
+2025-12-14 19:04:11.222 +05:30 [WRN] Failed to determine the https port for redirect.
+2025-12-14 19:04:11.732 +05:30 [ERR] HTTP POST /api/v1/payments/intents responded 500 in 493.4009 ms
+Microsoft.CSharp.RuntimeBinder.RuntimeBinderException: 'object' does not contain a definition for 'gateway'
+   at CallSite.Target(Closure, CallSite, Object)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecute1[T0,TRet](CallSite site, T0 arg0)
+   at PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent.CreatePaymentIntentCommandHandler.Handle(CreatePaymentIntentCommand request, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Features\Payments\Commands\CreatePaymentIntent\CreatePaymentIntentCommandHandler.cs:line 34
+   at PaymentModule.Application.Common.Behaviors.ValidationBehavior`2.Handle(TRequest request, RequestHandlerDelegate`1 next, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Common\Behaviors\ValidationBehavior.cs:line 42
+   at PaymentModule.Api.Controllers.V1.PaymentsController.CreateIntent(CreatePaymentIntentCommand command, String idempotencyKey, CancellationToken ct) in E:\projects\payment\back end\src\PaymentModule.Api\Controllers\V1\PaymentsController.cs:line 25
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at PaymentModule.Api.Middleware.SecureEnvelopeMiddleware.InvokeAsync(HttpContext context) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\SecureEnvelopeMiddleware.cs:line 102
+   at PaymentModule.Api.Middleware.IdempotencyMiddleware.InvokeAsync(HttpContext context, SecureDbContext dbContext) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\IdempotencyMiddleware.cs:line 36
+   at AspNetCoreRateLimit.RateLimitMiddleware`1.Invoke(HttpContext context) in C:\Users\User\Documents\Github\AspNetCoreRateLimit\src\AspNetCoreRateLimit\Middleware\RateLimitMiddleware.cs:line 124
+   at Serilog.AspNetCore.RequestLoggingMiddleware.Invoke(HttpContext httpContext)
+2025-12-14 19:04:11.872 +05:30 [ERR] An unhandled exception has occurred while executing the request.
+Microsoft.CSharp.RuntimeBinder.RuntimeBinderException: 'object' does not contain a definition for 'gateway'
+   at CallSite.Target(Closure, CallSite, Object)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecute1[T0,TRet](CallSite site, T0 arg0)
+   at PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent.CreatePaymentIntentCommandHandler.Handle(CreatePaymentIntentCommand request, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Features\Payments\Commands\CreatePaymentIntent\CreatePaymentIntentCommandHandler.cs:line 34
+   at PaymentModule.Application.Common.Behaviors.ValidationBehavior`2.Handle(TRequest request, RequestHandlerDelegate`1 next, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Common\Behaviors\ValidationBehavior.cs:line 42
+   at PaymentModule.Api.Controllers.V1.PaymentsController.CreateIntent(CreatePaymentIntentCommand command, String idempotencyKey, CancellationToken ct) in E:\projects\payment\back end\src\PaymentModule.Api\Controllers\V1\PaymentsController.cs:line 25
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at PaymentModule.Api.Middleware.SecureEnvelopeMiddleware.InvokeAsync(HttpContext context) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\SecureEnvelopeMiddleware.cs:line 102
+   at PaymentModule.Api.Middleware.IdempotencyMiddleware.InvokeAsync(HttpContext context, SecureDbContext dbContext) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\IdempotencyMiddleware.cs:line 36
+   at AspNetCoreRateLimit.RateLimitMiddleware`1.Invoke(HttpContext context) in C:\Users\User\Documents\Github\AspNetCoreRateLimit\src\AspNetCoreRateLimit\Middleware\RateLimitMiddleware.cs:line 124
+   at Serilog.AspNetCore.RequestLoggingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)
+2025-12-14 19:04:48.242 +05:30 [INF] Outbox Background Service started
+2025-12-14 19:04:54.742 +05:30 [WRN] Failed to determine the https port for redirect.
+2025-12-14 19:04:55.675 +05:30 [ERR] HTTP POST /api/v1/payments/intents responded 500 in 908.1569 ms
+Microsoft.CSharp.RuntimeBinder.RuntimeBinderException: 'object' does not contain a definition for 'gateway'
+   at CallSite.Target(Closure, CallSite, Object)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecute1[T0,TRet](CallSite site, T0 arg0)
+   at PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent.CreatePaymentIntentCommandHandler.Handle(CreatePaymentIntentCommand request, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Features\Payments\Commands\CreatePaymentIntent\CreatePaymentIntentCommandHandler.cs:line 34
+   at PaymentModule.Application.Common.Behaviors.ValidationBehavior`2.Handle(TRequest request, RequestHandlerDelegate`1 next, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Common\Behaviors\ValidationBehavior.cs:line 42
+   at PaymentModule.Api.Controllers.V1.PaymentsController.CreateIntent(CreatePaymentIntentCommand command, String idempotencyKey, CancellationToken ct) in E:\projects\payment\back end\src\PaymentModule.Api\Controllers\V1\PaymentsController.cs:line 25
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at PaymentModule.Api.Middleware.SecureEnvelopeMiddleware.InvokeAsync(HttpContext context) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\SecureEnvelopeMiddleware.cs:line 102
+   at PaymentModule.Api.Middleware.IdempotencyMiddleware.InvokeAsync(HttpContext context, SecureDbContext dbContext) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\IdempotencyMiddleware.cs:line 36
+   at AspNetCoreRateLimit.RateLimitMiddleware`1.Invoke(HttpContext context) in C:\Users\User\Documents\Github\AspNetCoreRateLimit\src\AspNetCoreRateLimit\Middleware\RateLimitMiddleware.cs:line 124
+   at Serilog.AspNetCore.RequestLoggingMiddleware.Invoke(HttpContext httpContext)
+2025-12-14 19:04:55.826 +05:30 [ERR] An unhandled exception has occurred while executing the request.
+Microsoft.CSharp.RuntimeBinder.RuntimeBinderException: 'object' does not contain a definition for 'gateway'
+   at CallSite.Target(Closure, CallSite, Object)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecute1[T0,TRet](CallSite site, T0 arg0)
+   at PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent.CreatePaymentIntentCommandHandler.Handle(CreatePaymentIntentCommand request, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Features\Payments\Commands\CreatePaymentIntent\CreatePaymentIntentCommandHandler.cs:line 34
+   at PaymentModule.Application.Common.Behaviors.ValidationBehavior`2.Handle(TRequest request, RequestHandlerDelegate`1 next, CancellationToken cancellationToken) in E:\projects\payment\back end\src\PaymentModule.Application\Common\Behaviors\ValidationBehavior.cs:line 42
+   at PaymentModule.Api.Controllers.V1.PaymentsController.CreateIntent(CreatePaymentIntentCommand command, String idempotencyKey, CancellationToken ct) in E:\projects\payment\back end\src\PaymentModule.Api\Controllers\V1\PaymentsController.cs:line 25
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+   at PaymentModule.Api.Middleware.SecureEnvelopeMiddleware.InvokeAsync(HttpContext context) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\SecureEnvelopeMiddleware.cs:line 102
+   at PaymentModule.Api.Middleware.IdempotencyMiddleware.InvokeAsync(HttpContext context, SecureDbContext dbContext) in E:\projects\payment\back end\src\PaymentModule.Api\Middleware\IdempotencyMiddleware.cs:line 36
+   at AspNetCoreRateLimit.RateLimitMiddleware`1.Invoke(HttpContext context) in C:\Users\User\Documents\Github\AspNetCoreRateLimit\src\AspNetCoreRateLimit\Middleware\RateLimitMiddleware.cs:line 124
+   at Serilog.AspNetCore.RequestLoggingMiddleware.Invoke(HttpContext httpContext)
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)
