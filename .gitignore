@@ -1,0 +1,35 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider / IntelliJ
+.idea/
+
+# User-specific files
+*.rsuser
+*.customizations
+*.userprefs
+
+# Environment / Secrets
+appsettings.Development.json
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Unit Test Results
+TestResults/
+
+# OS generated files
+.DS_Store
+Thumbs.db

@@ -5,20 +5,25 @@ using Microsoft.Extensions.Options;
 using PaymentModule.Domain.Ports;
 using PaymentModule.Domain.ValueObjects;
 using PaymentModule.Infrastructure.Gateways;
-
+using PaymentModule.Infrastructure.Configuration;
 namespace PaymentModule.Infrastructure.Gateways.Adapters;
 
 public class PayHereAdapter : IPaymentGateway
 {
     private readonly PayHereOptions _options;
+    private readonly ResiliencePipeline _pipeline;
 
-    public PayHereAdapter(IOptions<PayHereOptions> options)
+    public PayHereAdapter(IOptions<PayHereOptions> options, ResiliencePipelineProvider<string> pipelineProvider)
     {
         _options = options.Value;
+        _pipeline = pipelineProvider.GetPipeline("payment-gateway");
     }
 
     public Task<PaymentIntentResult> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct)
     {
+        // Wrap execution with Polly logic if making direct HTTP calls
+        // In this specific adapter, we are constructing a form, but we should prepare the pipeline for when we add direct API calls (e.g. status check)
+        
         var orderId = id.Value.ToString("N");
         var amountStr = amount.Value.ToString("0.00", CultureInfo.InvariantCulture);
         var signatureSource = _options.MerchantId + orderId + amountStr + amount.Currency + _options.MerchantSecret;

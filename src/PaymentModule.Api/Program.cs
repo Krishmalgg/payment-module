@@ -68,10 +68,16 @@ builder.Services.AddSingleton<ICryptoProvider, AesCryptoProvider>();
 var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
 if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
 {
-    builder.Services.Configure<PaymentModule.Infrastructure.Gateways.PayHereOptions>(
+    builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PayHereOptions>(
         builder.Configuration.GetSection("PayHere"));
     builder.Services.AddSingleton<IPaymentGateway, PayHereAdapter>();
 }
+
+// Resilience Configuration
+builder.Services.AddResiliencePipeline("payment-gateway", builder =>
+{
+    builder.AddPipeline(PaymentModule.Infrastructure.Configuration.ResiliencePolicies.CreatePaymentGatewayPipeline());
+});
 else if (string.Equals(provider, "Stripe", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddSingleton<IPaymentGateway, StripeAdapter>();
