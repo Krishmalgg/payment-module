@@ -3,6 +3,23 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+builder.Services.Configure<PaymentModule.Infrastructure.Gateways.PayHereOptions>(builder.Configuration.GetSection("PayHere"));
+builder.Services.AddSingleton<PaymentModule.Domain.Ports.ICryptoProvider, PaymentModule.Infrastructure.Security.AesCryptoProvider>();
+
+var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
+if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<PaymentModule.Domain.Ports.IPaymentGateway, PaymentModule.Infrastructure.Gateways.Adapters.PayHereAdapter>();
+}
+else if (string.Equals(provider, "Stripe", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<PaymentModule.Domain.Ports.IPaymentGateway, PaymentModule.Infrastructure.Gateways.Adapters.StripeAdapter>();
+}
+else
+{
+    builder.Services.AddSingleton<PaymentModule.Domain.Ports.IPaymentGateway, PaymentModule.Infrastructure.Gateways.Adapters.MockAdapter>();
+}
 
 var app = builder.Build();
 
@@ -13,6 +30,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseMiddleware<PaymentModule.Api.Middleware.SecureEnvelopeMiddleware>();
+app.MapControllers();
 
 var summaries = new[]
 {

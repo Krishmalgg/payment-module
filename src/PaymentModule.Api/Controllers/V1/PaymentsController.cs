@@ -22,12 +22,23 @@ public class PaymentsController : ControllerBase
         var result = await _gateway.CreatePaymentIntent(txId, new Money(request.Amount, request.Currency), request.Metadata, ct);
         return Ok(result);
     }
+
+    [HttpGet("success")]
+    public IActionResult Success([FromQuery] Guid transactionId)
+    {
+        return Ok(new { transactionId, status = "success" });
+    }
+
+    [HttpGet("cancel")]
+    public IActionResult Cancel([FromQuery] Guid transactionId)
+    {
+        return Ok(new { transactionId, status = "cancel" });
+    }
 }
 
 public sealed class CreateIntentRequest
 {
     public decimal Amount { get; set; }
-    public string Currency { get; set; } = "USD";
+    public string Currency { get; set; } = "LKR";
     public Dictionary<string, string>? Metadata { get; set; }
 }
-

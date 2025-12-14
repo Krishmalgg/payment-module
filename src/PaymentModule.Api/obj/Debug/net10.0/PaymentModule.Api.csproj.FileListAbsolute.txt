@@ -183,3 +183,4 @@ E:\projects\payment\back end\src\PaymentModule.Api\bin\Debug\net10.0\tr\Microsof
 E:\projects\payment\back end\src\PaymentModule.Api\bin\Debug\net10.0\zh-Hans\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 E:\projects\payment\back end\src\PaymentModule.Api\bin\Debug\net10.0\zh-Hant\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 E:\projects\payment\back end\src\PaymentModule.Api\bin\Debug\net10.0\runtimes\win\lib\net9.0\System.Windows.Extensions.dll
+E:\projects\payment\back end\src\PaymentModule.Api\obj\Debug\net10.0\PaymentModule.Api.sourcelink.json

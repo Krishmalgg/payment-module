@@ -9,3 +9,4 @@ E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentM
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\refint\PaymentModule.Domain.dll
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.pdb
 E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\ref\PaymentModule.Domain.dll
+E:\projects\payment\back end\src\PaymentModule.Domain\obj\Debug\net10.0\PaymentModule.Domain.sourcelink.json

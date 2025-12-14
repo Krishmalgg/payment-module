@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PaymentModule.Infrastructur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PaymentModule.Api", "src\PaymentModule.Api\PaymentModule.Api.csproj", "{C9344D04-9373-4C50-91D6-73741F332E9B}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PaymentModule.SecurityTests", "tests\PaymentModule.SecurityTests\PaymentModule.SecurityTests.csproj", "{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,6 +75,18 @@ Global
 		{C9344D04-9373-4C50-91D6-73741F332E9B}.Release|x64.Build.0 = Release|Any CPU
 		{C9344D04-9373-4C50-91D6-73741F332E9B}.Release|x86.ActiveCfg = Release|Any CPU
 		{C9344D04-9373-4C50-91D6-73741F332E9B}.Release|x86.Build.0 = Release|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Debug|x64.Build.0 = Debug|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Debug|x86.Build.0 = Debug|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Release|x64.ActiveCfg = Release|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Release|x64.Build.0 = Release|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Release|x86.ActiveCfg = Release|Any CPU
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -80,5 +96,6 @@ Global
 		{08D7672D-C67E-408C-8B7B-F5D490BFA73D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{2E445121-0E6B-499D-9C09-A5A94F62967E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{C9344D04-9373-4C50-91D6-73741F332E9B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{3F48D567-EA97-4293-9FA1-EF8B68DF69DB} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
