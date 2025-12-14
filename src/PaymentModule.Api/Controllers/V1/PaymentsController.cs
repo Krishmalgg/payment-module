@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent;
 
 [ApiController]
-[Route("api/v1/payments")]
+[Asp.Versioning.ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/payments")]
 public class PaymentsController : ControllerBase
 {
     private readonly IMediator _mediator;

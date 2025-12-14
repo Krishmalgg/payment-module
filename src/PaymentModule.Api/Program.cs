@@ -15,6 +15,7 @@ using PaymentModule.Infrastructure.Persistence.DbContext;
 using PaymentModule.Infrastructure.Security;
 using PaymentModule.Infrastructure.Services;
 using Serilog;
+using Polly;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,12 @@ builder.Services.AddCors(options =>
 
 // Payment Gateway Configuration
 builder.Services.AddSingleton<ICryptoProvider, AesCryptoProvider>();
+// Resilience Configuration
+builder.Services.AddResiliencePipeline("payment-gateway", builder =>
+{
+    builder.AddPipeline(PaymentModule.Infrastructure.Configuration.ResiliencePolicies.CreatePaymentGatewayPipeline());
+});
+
 var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
 if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
 {
@@ -73,11 +80,6 @@ if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddSingleton<IPaymentGateway, PayHereAdapter>();
 }
 
-// Resilience Configuration
-builder.Services.AddResiliencePipeline("payment-gateway", builder =>
-{
-    builder.AddPipeline(PaymentModule.Infrastructure.Configuration.ResiliencePolicies.CreatePaymentGatewayPipeline());
-});
 else if (string.Equals(provider, "Stripe", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddSingleton<IPaymentGateway, StripeAdapter>();
@@ -97,6 +99,24 @@ builder.Services.AddHostedService<OutboxBackgroundService>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(connectionString!)
     .AddCheck<PaymentGatewayHealthCheck>("payment_gateway");
+
+// API Versioning
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1);
+    options.ReportApiVersions = true;
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ApiVersionReader = Asp.Versioning.ApiVersionReader.Combine(
+        new Asp.Versioning.UrlSegmentApiVersionReader(),
+        new Asp.Versioning.HeaderApiVersionReader("X-Api-Version")
+    );
+})
+.AddMvc()
+.AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
+});
 
 // Controllers and OpenAPI
 builder.Services.AddControllers();

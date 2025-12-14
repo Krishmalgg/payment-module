@@ -6,6 +6,9 @@ using PaymentModule.Domain.Ports;
 using PaymentModule.Domain.ValueObjects;
 using PaymentModule.Infrastructure.Gateways;
 using PaymentModule.Infrastructure.Configuration;
+using Polly;
+using Polly.Registry;
+
 namespace PaymentModule.Infrastructure.Gateways.Adapters;
 
 public class PayHereAdapter : IPaymentGateway
