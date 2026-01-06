@@ -33,6 +33,7 @@ builder.Host.UseSerilog((context, config) =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<SecureDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<SecureDbContext>());
 
 // MediatR Configuration
 builder.Services.AddMediatR(cfg => {
@@ -47,6 +48,37 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreatePaymentIntentValidato
 builder.Services.AddMemoryCache();
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
 builder.Services.Configure<ClientRateLimitOptions>(builder.Configuration.GetSection("ClientRateLimiting"));
+
+// Load .env file
+DotNetEnv.Env.Load();
+
+// Bind S2S Options
+builder.Services.Configure<S2SSecurityOptions>(options =>
+{
+    // 1. Load from appsettings/config first
+    var section = builder.Configuration.GetSection("Security");
+    options.ApiKeys = section.GetSection("ApiKeys").Get<string[]>() ?? [];
+    options.HmacSecrets = section.GetSection("HmacSecrets").Get<string[]>() ?? [];
+
+    // 2. Override with .env if keys exist
+    var newKey = DotNetEnv.Env.GetString("NEW_S2S_API_KEY");
+    var oldKey = DotNetEnv.Env.GetString("OLD_S2S_API_KEY");
+    var newSecret = DotNetEnv.Env.GetString("NEW_S2S_HMAC_SECRET");
+    var oldSecret = DotNetEnv.Env.GetString("OLD_S2S_HMAC_SECRET");
+
+    var envApiKeys = new List<string>();
+    var envSecrets = new List<string>();
+
+    if (!string.IsNullOrWhiteSpace(newKey)) envApiKeys.Add(newKey);
+    if (!string.IsNullOrWhiteSpace(oldKey)) envApiKeys.Add(oldKey);
+
+    if (!string.IsNullOrWhiteSpace(newSecret)) envSecrets.Add(newSecret);
+    if (!string.IsNullOrWhiteSpace(oldSecret)) envSecrets.Add(oldSecret);
+    
+    if (envApiKeys.Count > 0) options.ApiKeys = envApiKeys.ToArray();
+    if (envSecrets.Count > 0) options.HmacSecrets = envSecrets.ToArray();
+});
+
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, PaymentModule.Api.Configuration.PaymentRateLimitConfiguration>();
 
@@ -65,12 +97,32 @@ builder.Services.AddCors(options =>
 });
 
 // Payment Gateway Configuration
-builder.Services.AddSingleton<ICryptoProvider, AesCryptoProvider>();
 // Resilience Configuration
 builder.Services.AddResiliencePipeline("payment-gateway", builder =>
 {
     builder.AddPipeline(PaymentModule.Infrastructure.Configuration.ResiliencePolicies.CreatePaymentGatewayPipeline());
 });
+
+// PaperMaker Configuration
+builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PaperMakerOptions>(options =>
+{
+    builder.Configuration.GetSection("PaperMaker").Bind(options);
+    
+    var newKey = DotNetEnv.Env.GetString("NEW_S2S_API_KEY");
+    var oldKey = DotNetEnv.Env.GetString("OLD_S2S_API_KEY");
+    var newSecret = DotNetEnv.Env.GetString("NEW_S2S_HMAC_SECRET");
+    var oldSecret = DotNetEnv.Env.GetString("OLD_S2S_HMAC_SECRET");
+
+    options.ApiKeys = new List<string>();
+    options.HmacSecrets = new List<string>();
+
+    if (!string.IsNullOrWhiteSpace(newKey)) options.ApiKeys.Add(newKey);
+    if (!string.IsNullOrWhiteSpace(oldKey)) options.ApiKeys.Add(oldKey);
+
+    if (!string.IsNullOrWhiteSpace(newSecret)) options.HmacSecrets.Add(newSecret);
+    if (!string.IsNullOrWhiteSpace(oldSecret)) options.HmacSecrets.Add(oldSecret);
+});
+builder.Services.AddHttpClient();
 
 var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
 if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
@@ -79,14 +131,9 @@ if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
         builder.Configuration.GetSection("PayHere"));
     builder.Services.AddSingleton<IPaymentGateway, PayHereAdapter>();
 }
-
-else if (string.Equals(provider, "Stripe", StringComparison.OrdinalIgnoreCase))
-{
-    builder.Services.AddSingleton<IPaymentGateway, StripeAdapter>();
-}
 else
 {
-    builder.Services.AddSingleton<IPaymentGateway, MockAdapter>();
+    // builder.Services.AddSingleton<IPaymentGateway, MockAdapter>();
 }
 
 // Infrastructure Services
@@ -146,8 +193,8 @@ app.UseCors("AllowedOrigins");
 app.UseIpRateLimiting();
 
 // Custom Middleware
+app.UseMiddleware<S2SSecurityMiddleware>(); // Added S2S Security
 app.UseMiddleware<IdempotencyMiddleware>();
-app.UseMiddleware<SecureEnvelopeMiddleware>();
 
 // Routing
 app.MapControllers();

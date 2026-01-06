@@ -4,11 +4,12 @@ using PaymentModule.Domain.Entities;
 
 namespace PaymentModule.Infrastructure.Persistence.DbContext;
 
-public class SecureDbContext : Microsoft.EntityFrameworkCore.DbContext
+using PaymentModule.Application.Common.Interfaces;
+
+public class SecureDbContext : Microsoft.EntityFrameworkCore.DbContext, IApplicationDbContext
 {
     public SecureDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<SecureDbContext> options) : base(options) { }
 
-    public Microsoft.EntityFrameworkCore.DbSet<Wallet> Wallets => Set<Wallet>();
     public Microsoft.EntityFrameworkCore.DbSet<Transaction> Transactions => Set<Transaction>();
     public Microsoft.EntityFrameworkCore.DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public Microsoft.EntityFrameworkCore.DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
@@ -17,10 +18,7 @@ public class SecureDbContext : Microsoft.EntityFrameworkCore.DbContext
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SecureDbContext).Assembly);
 
-        // Global query filter for soft delete
-        modelBuilder.Entity<Wallet>().HasQueryFilter(w => w.DeletedAt == null);
-        modelBuilder.Entity<Transaction>().HasQueryFilter(t => t.DeletedAt == null);
-
+        // Global query filter removed for Wallet (no longer exists)
         base.OnModelCreating(modelBuilder);
     }
 

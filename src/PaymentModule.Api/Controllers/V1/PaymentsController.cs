@@ -23,7 +23,9 @@ public class PaymentsController : ControllerBase
         CancellationToken ct)
     {
         var commandWithKey = command with { IdempotencyKey = idempotencyKey };
+        Console.WriteLine("Request Body: " + System.Text.Json.JsonSerializer.Serialize(command));
         var result = await _mediator.Send(commandWithKey, ct);
+        Console.WriteLine("result :"+result);
         return Ok(result);
     }
 

@@ -31,6 +31,12 @@ public class OutboxService : IOutboxService
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<OutboxMessage?> GetMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.OutboxMessages
+            .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
+    }
+
     public async Task ProcessMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
     {
         var message = await _dbContext.OutboxMessages

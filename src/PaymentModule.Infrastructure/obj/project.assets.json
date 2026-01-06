@@ -1663,6 +1663,7 @@
           "FluentValidation": "11.11.0",
           "FluentValidation.DependencyInjectionExtensions": "11.11.0",
           "MediatR": "12.4.1",
+          "Microsoft.EntityFrameworkCore": "10.0.1",
           "PaymentModule.Domain": "1.0.0"
         },
         "compile": {

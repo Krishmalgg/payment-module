@@ -32,10 +32,13 @@ public class IdempotencyMiddleware
 
         if (string.IsNullOrEmpty(idempotencyKey))
         {
+            Console.WriteLine($"[Idempotency] Request received WITHOUT {IdempotencyKeyHeader} header.");
             // No idempotency key, proceed normally
             await _next(context);
             return;
         }
+
+        Console.WriteLine($"[Idempotency] Request received with {IdempotencyKeyHeader}: {idempotencyKey}");
 
         // Read request body
         context.Request.EnableBuffering();

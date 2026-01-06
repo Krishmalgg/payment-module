@@ -6,7 +6,14 @@ public record CreatePaymentIntentCommand(
     decimal Amount,
     string Currency,
     Dictionary<string, string>? Metadata,
-    string? IdempotencyKey
+    string? IdempotencyKey,
+    string? UserId,
+    string? UserName,
+    string? Email,
+    string? OrderId,
+    string? Address,
+    string? City,
+    string? Country
 ) : IRequest<CreatePaymentIntentResponse>;
 
 public record CreatePaymentIntentResponse(
