@@ -1358,6 +1358,19 @@
           }
         }
       },
+      "RabbitMQ.Client/7.2.0": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0/RabbitMQ.Client.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/RabbitMQ.Client.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Serilog/3.1.1": {
         "type": "package",
         "compile": {
@@ -1815,6 +1828,9 @@
       "PaymentModule.Domain/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "MediatR.Contracts": "2.0.1"
+        },
         "compile": {
           "bin/placeholder/PaymentModule.Domain.dll": {}
         },
@@ -1831,7 +1847,8 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.0",
           "PaymentModule.Application": "1.0.0",
           "PaymentModule.Domain": "1.0.0",
-          "Polly": "8.5.0"
+          "Polly": "8.5.0",
+          "RabbitMQ.Client": "7.2.0"
         },
         "compile": {
           "bin/placeholder/PaymentModule.Infrastructure.dll": {}
@@ -3882,6 +3899,23 @@
         "polly.ratelimiting.nuspec"
       ]
     },
+    "RabbitMQ.Client/7.2.0": {
+      "sha512": "PPQ7cF7lwbhqC4up6en1bTUZlz06YqQwJecOJzsguTtyhNA7oL5uNDZIx/h6ZfcyPZV4V3DYKSCxfm4RUFLcbA==",
+      "type": "package",
+      "path": "rabbitmq.client/7.2.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "icon.png",
+        "lib/net8.0/RabbitMQ.Client.dll",
+        "lib/net8.0/RabbitMQ.Client.xml",
+        "lib/netstandard2.0/RabbitMQ.Client.dll",
+        "lib/netstandard2.0/RabbitMQ.Client.xml",
+        "rabbitmq.client.7.2.0.nupkg.sha512",
+        "rabbitmq.client.nuspec"
+      ]
+    },
     "Serilog/3.1.1": {
       "sha512": "P6G4/4Kt9bT635bhuwdXlJ2SCqqn2nhh4gqFqQueCOr9bK/e7W9ll/IoX1Ter948cV2Z/5+5v8pAfJYUISY03A==",
       "type": "package",
@@ -4589,11 +4623,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\PaymentModule.Api.csproj",
+      "projectUniqueName": "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\PaymentModule.Api.csproj",
       "projectName": "PaymentModule.Api",
-      "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\PaymentModule.Api.csproj",
+      "projectPath": "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\PaymentModule.Api.csproj",
       "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-      "outputPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\obj\\",
+      "outputPath": "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -21,9 +21,6 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
         
         builder.Property(x => x.OccurredAt)
             .IsRequired();
-        
-        builder.Property(x => x.RetryCount)
-            .IsRequired();
 
         // Index for efficient polling
         builder.HasIndex(x => new { x.ProcessedAt, x.OccurredAt });

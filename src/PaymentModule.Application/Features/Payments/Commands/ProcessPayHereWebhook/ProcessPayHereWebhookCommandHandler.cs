@@ -71,7 +71,8 @@ public class ProcessPayHereWebhookCommandHandler : IRequestHandler<ProcessPayHer
             await _dbContext.SaveChangesAsync(ct);
             Console.WriteLine($"[WebhookHandler] Database updated. Transaction ID: {transaction.Id}, Previous: {previousStatus}, New: {transaction.Status}");
 
-            // 3. Notify PaperMaker ONLY if Suspicious
+            /* 
+            // 3. Notify PaperMaker ONLY if Suspicious (DUPLICATE - handled by TransactionStatusChangedEvent)
             if (transaction.Status == "SUSPICIOUS")
             {
                 var eventPayload = JsonSerializer.Serialize(new {
@@ -94,7 +95,7 @@ public class ProcessPayHereWebhookCommandHandler : IRequestHandler<ProcessPayHer
                 );
                 Console.WriteLine("[WebhookHandler] 🛡️ Outbox message 'SuspiciousActivity' created for PaperMaker.");
             }
-            // Note: Per user request, we are NOT sending regular completions/failures to PaperMaker here.
+            */
         }
         else
         {

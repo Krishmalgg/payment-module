@@ -59,7 +59,7 @@ public class PayHereAdapter : IPaymentGateway
             ["merchant_id"] = _options.MerchantId,
             ["return_url"] = _options.ReturnUrl,
             ["cancel_url"] = _options.CancelUrl,
-            ["notify_url"] = "https://df7b8ddfdf95.ngrok-free.app/api/v1/webhooks/payhere",
+            ["notify_url"] = "https://c23f32529c27.ngrok-free.app/api/v1/webhooks/payhere",
             ["order_id"] = orderId,
             ["items"] = metadata != null && metadata.TryGetValue("items", out var items) ? items : "Payment",
             ["amount"] = amountStr,
@@ -138,10 +138,10 @@ public class PayHereAdapter : IPaymentGateway
         var result = new Dictionary<string, object>
         {
             ["ok"] = isOk,
-            ["orderId"] = orderId,
-            ["status"] = statusCode,
-            ["amount"] = amount,
-            ["currency"] = currency,
+            ["orderId"] = orderId ?? string.Empty,
+            ["status"] = statusCode ?? string.Empty,
+            ["amount"] = amount ?? string.Empty,
+            ["currency"] = currency ?? string.Empty,
             ["paymentId"] = form.TryGetValue("payment_id", out var pid) ? pid : ""
         };
         

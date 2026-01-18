@@ -222,3 +222,4 @@ E:\projects\payment\back end\src\paymentmodule.api\obj\Debug\net10.0\refint\Paym
 E:\projects\payment\back end\src\paymentmodule.api\obj\Debug\net10.0\PaymentModule.Api.pdb
 E:\projects\payment\back end\src\paymentmodule.api\obj\Debug\net10.0\PaymentModule.Api.genruntimeconfig.cache
 E:\projects\payment\back end\src\paymentmodule.api\obj\Debug\net10.0\ref\PaymentModule.Api.dll
+E:\projects\payment\back end\src\paymentmodule.api\bin\Debug\net10.0\RabbitMQ.Client.dll

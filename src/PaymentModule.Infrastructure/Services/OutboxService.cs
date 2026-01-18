@@ -24,7 +24,7 @@ public class OutboxService : IOutboxService
     public async Task<IEnumerable<Guid>> GetUnprocessedMessageIdsAsync(int batchSize = 10, CancellationToken cancellationToken = default)
     {
         return await _dbContext.OutboxMessages
-            .Where(m => m.ProcessedAt == null && m.RetryCount < 5)
+            .Where(m => m.ProcessedAt == null)
             .OrderBy(m => m.OccurredAt)
             .Take(batchSize)
             .Select(m => m.Id)
@@ -45,18 +45,6 @@ public class OutboxService : IOutboxService
         if (message != null)
         {
             message.MarkAsProcessed();
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-    }
-
-    public async Task MarkAsFailedAsync(Guid messageId, string error, CancellationToken cancellationToken = default)
-    {
-        var message = await _dbContext.OutboxMessages
-            .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
-
-        if (message != null)
-        {
-            message.MarkAsFailed(error);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }

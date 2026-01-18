@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PaymentModule.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c4fbbc252c530d68be97285109d7a55aabbb4b65")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b34dfe1ceaa2e25c450e280583340e080c5e1876")]
 [assembly: System.Reflection.AssemblyProductAttribute("PaymentModule.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PaymentModule.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

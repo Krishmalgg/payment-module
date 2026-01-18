@@ -6,5 +6,4 @@ public interface IOutboxService
     Task<IEnumerable<Guid>> GetUnprocessedMessageIdsAsync(int batchSize = 10, CancellationToken cancellationToken = default);
     Task<Domain.Entities.OutboxMessage?> GetMessageAsync(Guid messageId, CancellationToken cancellationToken = default);
     Task ProcessMessageAsync(Guid messageId, CancellationToken cancellationToken = default);
-    Task MarkAsFailedAsync(Guid messageId, string error, CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,5 @@
 using PaymentModule.Domain.Common;
+using PaymentModule.Domain.Events;
 
 namespace PaymentModule.Domain.Entities;
 
@@ -56,25 +57,33 @@ public class Transaction : BaseEntity
     {
         if (Status == "COMPLETED") return;
 
+        var oldStatus = Status;
         Status = "COMPLETED";
         ProviderRefId = providerRefId;
         CompletedAt = DateTime.UtcNow;
+        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency));
         MarkAsUpdated();
     }
 
     public void MarkAsFailed()
     {
         if (Status == "COMPLETED" || Status == "SUSPICIOUS") return;
+        
+        var oldStatus = Status;
         Status = "FAILED";
+        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency));
         MarkAsUpdated();
     }
 
     public void MarkAsSuspicious(string reason)
     {
         if (Status == "COMPLETED") return;
+        
+        var oldStatus = Status;
         Status = "SUSPICIOUS";
         // We can use ProviderRefId or a new field to store the reason if needed, 
         // but for now, let's just update the status.
+        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency));
         MarkAsUpdated();
     }
 

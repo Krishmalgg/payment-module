@@ -96,24 +96,6 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
         _dbContext.Transactions.Add(transaction);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // --- NEW: Add to Outbox for Reliable Delivery ---
-        var eventPayload = System.Text.Json.JsonSerializer.Serialize(new {
-            TransactionId = transaction.Id,
-            OrderId = transaction.OrderId,
-            UserId = transaction.UserId,
-            Amount = transaction.Amount,
-            Currency = transaction.Currency,
-            Status = transaction.Status,
-            OccurredAt = DateTime.UtcNow
-        });
-
-        await _outbox.AddMessageAsync(
-            type: "PaymentIntentCreated",
-            payload: eventPayload,
-            cancellationToken: cancellationToken
-        );
-        // ------------------------------------------------
-
         return new CreatePaymentIntentResponse(
             Gateway: result.Gateway,
             Action: result.Action,

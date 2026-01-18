@@ -138,6 +138,14 @@ else
 
 // Infrastructure Services
 builder.Services.AddScoped<IOutboxService, OutboxService>();
+builder.Services.AddSingleton<IOutboxTrigger, OutboxTrigger>();
+builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqConnection>();
+builder.Services.AddTransient<IS2SHeaderGenerator, S2SHeaderGenerator>();
+
+// Producers (Registered as concrete types or via Factory later)
+builder.Services.AddTransient<PaymentModule.Infrastructure.Communication.Core.Producers.RabbitMqProducer>();
+builder.Services.AddTransient<PaymentModule.Infrastructure.Communication.Core.Producers.HttpProducer>();
+builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Factory.ProducerFactory>();
 
 // Background Services
 builder.Services.AddHostedService<OutboxBackgroundService>();
