@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using PaymentModule.Application.Common.Interfaces;
-using PaymentModule.Infrastructure.Communication.Core.Factory;
+using PaymentModule.Infrastructure.Communication.Core.Outbox;
 
 namespace PaymentModule.Infrastructure.BackgroundServices;
 
@@ -11,28 +11,25 @@ public class OutboxBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxBackgroundService> _logger;
-    private readonly ProducerFactory _producerFactory;
     private readonly IConfiguration _configuration;
     private readonly IOutboxTrigger _trigger;
-    private readonly TimeSpan _defaultInterval = TimeSpan.FromSeconds(30); // Fail-safe polling
+    private readonly TimeSpan _defaultInterval = TimeSpan.FromSeconds(30);
 
     public OutboxBackgroundService(
         IServiceProvider serviceProvider,
         ILogger<OutboxBackgroundService> logger,
-        ProducerFactory producerFactory,
         IConfiguration configuration,
         IOutboxTrigger trigger)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
-        _producerFactory = producerFactory;
         _configuration = configuration;
         _trigger = trigger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Outbox Background Service started (Signal Mode)");
+        _logger.LogInformation("Outbox Background Service started (Dispatcher mode)");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -41,7 +38,6 @@ public class OutboxBackgroundService : BackgroundService
                 bool messagesProcessed;
                 do
                 {
-                    // Keep processing as long as we find messages (Batch Mode)
                     messagesProcessed = await ProcessOutboxMessagesAsync(stoppingToken);
                 } while (messagesProcessed && !stoppingToken.IsCancellationRequested);
             }
@@ -50,7 +46,6 @@ public class OutboxBackgroundService : BackgroundService
                 _logger.LogError(ex, "Error processing outbox messages");
             }
 
-            // Only wait when we are idle (queue is empty)
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
             cts.CancelAfter(_defaultInterval);
 
@@ -58,10 +53,7 @@ public class OutboxBackgroundService : BackgroundService
             {
                 await _trigger.WaitForTriggerAsync(cts.Token);
             }
-            catch (OperationCanceledException)
-            {
-                // Timeout or stoppingToken -> loop again
-            }
+            catch (OperationCanceledException) { }
         }
 
         _logger.LogInformation("Outbox Background Service stopped");
@@ -71,13 +63,11 @@ public class OutboxBackgroundService : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         var outboxService = scope.ServiceProvider.GetRequiredService<IOutboxService>();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxDispatcher>();
 
         var messageIds = await outboxService.GetUnprocessedMessageIdsAsync(10, cancellationToken);
 
         if (!messageIds.Any()) return false;
-
-        var producer = _producerFactory.GetProducer();
-        var destination = _configuration["Messaging:Parameters:QueueName"] ?? "payment.notifications";
 
         foreach (var messageId in messageIds)
         {
@@ -88,8 +78,8 @@ public class OutboxBackgroundService : BackgroundService
 
                 _logger.LogInformation("Processing Outbox Message: {Id} Type: {Type}", messageId, message.Type);
 
-                // Send with feedback
-                var result = await producer.SendAsync(destination, message.Payload, cancellationToken);
+                // Dispatch via feature-specific handler
+                var result = await dispatcher.DispatchAsync(message, cancellationToken);
 
                 if (result.Success)
                 {
@@ -98,9 +88,7 @@ public class OutboxBackgroundService : BackgroundService
                 }
                 else
                 {
-                    _logger.LogWarning("Failed to send message {MessageId}. Error: {Error}. Retrying in 10s...", messageId, result.ErrorMessage);
-                    
-                    // Wait 10 seconds before next attempt (requested behavior)
+                    _logger.LogWarning("Failed to process message {MessageId}. Error: {Error}. Retrying in 10s...", messageId, result.ErrorMessage);
                     await Task.Delay(10000, cancellationToken);
                 }
             }

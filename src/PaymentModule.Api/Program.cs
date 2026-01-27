@@ -142,6 +142,14 @@ builder.Services.AddSingleton<IOutboxTrigger, OutboxTrigger>();
 builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqConnection>();
 builder.Services.AddTransient<IS2SHeaderGenerator, S2SHeaderGenerator>();
 
+// Feature-Specific Notifiers
+builder.Services.AddScoped<PaymentModule.Application.Features.Payments.Interfaces.IPaymentStatusNotifier, 
+    PaymentModule.Infrastructure.Communication.Features.NotifyPaymentStatus.PaymentStatusNotifier>();
+builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.IOutboxMessageHandler, 
+    PaymentModule.Infrastructure.Communication.Features.NotifyPaymentStatus.PaymentStatusNotifier>();
+builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.IOutboxDispatcher, 
+    PaymentModule.Infrastructure.Communication.Core.Outbox.OutboxDispatcher>();
+
 // Producers (Registered as concrete types or via Factory later)
 builder.Services.AddTransient<PaymentModule.Infrastructure.Communication.Core.Producers.RabbitMqProducer>();
 builder.Services.AddTransient<PaymentModule.Infrastructure.Communication.Core.Producers.HttpProducer>();

@@ -2,7 +2,6 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PaymentModule.Application.Common.Interfaces;
 using PaymentModule.Domain.Ports;
-using System.Text.Json;
 
 namespace PaymentModule.Application.Features.Payments.Commands.ProcessPayHereWebhook;
 
@@ -10,16 +9,13 @@ public class ProcessPayHereWebhookCommandHandler : IRequestHandler<ProcessPayHer
 {
     private readonly IPaymentGateway _gateway;
     private readonly IApplicationDbContext _dbContext;
-    private readonly IOutboxService _outbox;
 
     public ProcessPayHereWebhookCommandHandler(
         IPaymentGateway gateway, 
-        IApplicationDbContext dbContext,
-        IOutboxService outbox)
+        IApplicationDbContext dbContext)
     {
         _gateway = gateway;
         _dbContext = dbContext;
-        _outbox = outbox;
     }
 
     public async Task<object> Handle(ProcessPayHereWebhookCommand request, CancellationToken ct)
@@ -70,32 +66,7 @@ public class ProcessPayHereWebhookCommandHandler : IRequestHandler<ProcessPayHer
         {
             await _dbContext.SaveChangesAsync(ct);
             Console.WriteLine($"[WebhookHandler] Database updated. Transaction ID: {transaction.Id}, Previous: {previousStatus}, New: {transaction.Status}");
-
-            /* 
-            // 3. Notify PaperMaker ONLY if Suspicious (DUPLICATE - handled by TransactionStatusChangedEvent)
-            if (transaction.Status == "SUSPICIOUS")
-            {
-                var eventPayload = JsonSerializer.Serialize(new {
-                    TransactionId = transaction.Id,
-                    OrderId = transaction.OrderId,
-                    Amount = transaction.Amount,
-                    Currency = transaction.Currency,
-                    UserId = transaction.UserId,
-                    UserEmail = transaction.Email,
-                    FullName = transaction.FullName,
-                    Status = "SUSPICIOUS",
-                    Reason = "MD5 Signature Mismatch",
-                    OccurredAt = DateTime.UtcNow
-                });
-
-                await _outbox.AddMessageAsync(
-                    type: "SuspiciousActivity",
-                    payload: eventPayload,
-                    cancellationToken: ct
-                );
-                Console.WriteLine("[WebhookHandler] 🛡️ Outbox message 'SuspiciousActivity' created for PaperMaker.");
-            }
-            */
+            Console.WriteLine($"[WebhookHandler] ✅ Status changed. Domain event will trigger notification.");
         }
         else
         {

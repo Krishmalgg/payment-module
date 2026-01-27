@@ -61,7 +61,7 @@ public class Transaction : BaseEntity
         Status = "COMPLETED";
         ProviderRefId = providerRefId;
         CompletedAt = DateTime.UtcNow;
-        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency));
+        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency, UserId, Email, FullName, ProviderRefId));
         MarkAsUpdated();
     }
 
@@ -71,7 +71,7 @@ public class Transaction : BaseEntity
         
         var oldStatus = Status;
         Status = "FAILED";
-        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency));
+        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency, UserId, Email, FullName, ProviderRefId));
         MarkAsUpdated();
     }
 
@@ -83,7 +83,7 @@ public class Transaction : BaseEntity
         Status = "SUSPICIOUS";
         // We can use ProviderRefId or a new field to store the reason if needed, 
         // but for now, let's just update the status.
-        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency));
+        AddDomainEvent(new TransactionStatusChangedEvent(Id, oldStatus, Status, OrderId, Amount, Currency, UserId, Email, FullName, ProviderRefId));
         MarkAsUpdated();
     }
 

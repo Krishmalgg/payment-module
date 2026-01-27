@@ -10,8 +10,22 @@ public class TransactionStatusChangedEvent : DomainEvent
     public string OrderId { get; }
     public decimal Amount { get; }
     public string Currency { get; }
+    public Guid UserId { get; }
+    public string? Email { get; }
+    public string FullName { get; }
+    public string? ProviderRefId { get; }
 
-    public TransactionStatusChangedEvent(Guid transactionId, string oldStatus, string newStatus, string orderId, decimal amount, string currency)
+    public TransactionStatusChangedEvent(
+        Guid transactionId, 
+        string oldStatus, 
+        string newStatus, 
+        string orderId, 
+        decimal amount, 
+        string currency,
+        Guid userId,
+        string? email,
+        string fullName,
+        string? providerRefId)
     {
         TransactionId = transactionId;
         OldStatus = oldStatus;
@@ -19,5 +33,9 @@ public class TransactionStatusChangedEvent : DomainEvent
         OrderId = orderId;
         Amount = amount;
         Currency = currency;
+        UserId = userId;
+        Email = email;
+        FullName = fullName;
+        ProviderRefId = providerRefId;
     }
 }

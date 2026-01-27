@@ -59,7 +59,7 @@ public class PayHereAdapter : IPaymentGateway
             ["merchant_id"] = _options.MerchantId,
             ["return_url"] = _options.ReturnUrl,
             ["cancel_url"] = _options.CancelUrl,
-            ["notify_url"] = "https://c23f32529c27.ngrok-free.app/api/v1/webhooks/payhere",
+            ["notify_url"] = "https://c0c852ea24b7.ngrok-free.app/api/v1/webhooks/payhere",
             ["order_id"] = orderId,
             ["items"] = metadata != null && metadata.TryGetValue("items", out var items) ? items : "Payment",
             ["amount"] = amountStr,
