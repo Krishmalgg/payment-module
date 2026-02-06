@@ -179,3 +179,5 @@ E:\projects\payment\back end\tests\PaymentModule.SecurityTests\obj\Debug\net10.0
 E:\projects\payment\back end\tests\PaymentModule.SecurityTests\obj\Debug\net10.0\PaymentModule.SecurityTests.pdb
 E:\projects\payment\back end\tests\PaymentModule.SecurityTests\obj\Debug\net10.0\PaymentModule.SecurityTests.genruntimeconfig.cache
 E:\projects\payment\back end\tests\PaymentModule.SecurityTests\obj\Debug\net10.0\ref\PaymentModule.SecurityTests.dll
+E:\projects\payment\back end\tests\PaymentModule.SecurityTests\bin\Debug\net10.0\RabbitMQ.Client.dll
+E:\projects\payment\back end\tests\PaymentModule.SecurityTests\bin\Debug\net10.0\System.Threading.RateLimiting.dll

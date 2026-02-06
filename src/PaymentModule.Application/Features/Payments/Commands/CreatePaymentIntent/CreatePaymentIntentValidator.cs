@@ -19,11 +19,6 @@ public class CreatePaymentIntentValidator : AbstractValidator<CreatePaymentInten
             .WithMessage("Currency is required")
             .Must(BeValidCurrency)
             .WithMessage("Currency must be a valid ISO 4217 code (e.g., LKR, USD, EUR)");
-
-        RuleFor(x => x.IdempotencyKey)
-            .MaximumLength(255)
-            .When(x => x.IdempotencyKey != null)
-            .WithMessage("Idempotency key must not exceed 255 characters");
     }
 
     private bool BeValidCurrency(string currency)

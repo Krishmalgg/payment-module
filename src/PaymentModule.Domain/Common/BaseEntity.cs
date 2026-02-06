@@ -2,17 +2,23 @@ namespace PaymentModule.Domain.Common;
 
 public abstract class BaseEntity
 {
-    public DateTime CreatedAt { get; protected set; } = DateTime.UtcNow;
-    public DateTime? UpdatedAt { get; protected set; }
-    public DateTime? DeletedAt { get; protected set; }
+    private readonly List<DomainEvent> _domainEvents = new();
     
-    public bool IsDeleted => DeletedAt.HasValue;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyCollection<DomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
-    public void MarkAsDeleted()
+    public void AddDomainEvent(DomainEvent domainEvent)
     {
-        DeletedAt = DateTime.UtcNow;
+        _domainEvents.Add(domainEvent);
     }
 
+    public void ClearDomainEvents()
+    {
+        _domainEvents.Clear();
+    }
+    
+    public DateTime CreatedAt { get; protected set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; protected set; }
     public void MarkAsUpdated()
     {
         UpdatedAt = DateTime.UtcNow;

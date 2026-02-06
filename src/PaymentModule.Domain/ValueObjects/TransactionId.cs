@@ -4,7 +4,7 @@ public readonly struct TransactionId
 {
     public Guid Value { get; }
 
-    private TransactionId(Guid value)
+    public TransactionId(Guid value)
     {
         Value = value;
     }

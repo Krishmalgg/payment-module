@@ -1,8 +1,11 @@
-namespace PaymentModule.Api.Controllers.V1;
-
+using System.Text.Json;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent;
+using PaymentModule.Application.Features.Payments.Commands.AddCard;
+using PaymentModule.Application.Features.Payments.Queries.GetStoredCards;
+
+namespace PaymentModule.Api.Controllers.V1;
 
 [ApiController]
 [Asp.Versioning.ApiVersion("1.0")]
@@ -24,6 +27,21 @@ public class PaymentsController : ControllerBase
     {
         var commandWithKey = command with { IdempotencyKey = idempotencyKey };
         var result = await _mediator.Send(commandWithKey, ct);
+        return Ok(result);
+    }
+
+    [HttpPost("add-card")]
+    public async Task<IActionResult> AddCard([FromBody] AddCardCommand command, CancellationToken ct)
+    {
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("stored-cards/{userId}")]
+    public async Task<IActionResult> GetStoredCards(Guid userId)
+    {
+        var result = await _mediator.Send(new GetStoredCardsQuery(userId));
+        Console.WriteLine("result :" + JsonSerializer.Serialize(result));
         return Ok(result);
     }
 

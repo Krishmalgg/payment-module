@@ -1,0 +1,62 @@
+@hostname = localhost
+@port = 5025
+@host = {{hostname}}:{{port}}
+@contentType = application/json
+@formContentType = application/json
+
+# --------------------------------------------------------------------------------
+# 1. Create Payment Intent (Valid S2S Headers)
+# --------------------------------------------------------------------------------
+# This request uses pre-calculated HMAC headers for the body: {"amount":1000,"currency":"LKR"}
+# API Key: 550e8400-e29b-41d4-a716-446655440000
+# Secret: test_hmac_secret_key_123
+# Timestamp: 1234567890
+# Nonce: random-nonce
+# --------------------------------------------------------------------------------
+
+POST http://localhost:5025/api/v1/payments/intents
+Content-Type: application/json
+x-api-key: 48e831bc071d62007298d8c1fbfb450fb123254a8e8a894d2dbc717a99a71c15
+x-timestamp: 123456
+x-nonce: test_nonce
+x-signature: b002c49c40486d0b637220b6d8ad4b5a9c4baaa769d6402c28b45cc88d5b0646
+
+{"amount":1500,"currency":"LKR","userId":"8606e904-15e6-45ab-922a-63890f7a7cf6","email":"test@gmail.com","userName":"Test User","orderId":"FINAL_TEST_ORDER"}
+
+
+
+
+# --------------------------------------------------------------------------------
+# 2. Simulate Suspicious PayHere Webhook (Invalid Signature)
+# --------------------------------------------------------------------------------
+# INSTRUCTIONS:
+# 1. Run request #1 above.
+# 2. Copy the "id" from the response (e.g., "3fa85f64-5717-4562-b3fc-2c963f66afa6").
+# 3. Replace the 'order_id' value below with that ID.
+# 4. Run this request.
+# 
+# RESULT:
+# The server should log "[SECURITY ALERT] MD5 Signature Mismatch" and mark the transaction as SUSPICIOUS.
+# --------------------------------------------------------------------------------
+POST http://{{host}}/api/v1/webhooks/payhere
+Content-Type: application/x-www-form-urlencoded
+
+merchant_id=1211149&order_id=REPLACE_WITH_TRANSACTION_ID&payhere_amount=1000.00&payhere_currency=LKR&status_code=2&md5sig=INVALID_SIGNATURE_FOR_TESTING&method=ONE_TIME_PAYMENT_METHOD&status_message=Successfully+completed+the+payment.&card_holder_name=John+Doe&card_no=xxxxxxxxxxxx1234&card_expiry=12/25
+
+
+# --------------------------------------------------------------------------------
+# 3. Main Server S2S Check (Card Payment)
+# --------------------------------------------------------------------------------
+# Target: http://localhost:5201/api/v1/payments/card
+# JSON Body: {"amount":1500,"currency":"LKR","paymentId":"PID_001","paperId":"PAPER_001"}
+# Signature calculated for secret: test_hmac_secret_key_123
+# --------------------------------------------------------------------------------
+
+POST http://localhost:5201/api/v1/payments/card
+Content-Type: application/json
+x-api-key: 48e831bc071d62007298d8c1fbfb450fb123254a8e8a894d2dbc717a99a71c15
+x-timestamp: 123456
+x-nonce: test_nonce
+x-signature: 143d4db3f7d2e9bf63a4b0270c83cc907fc1e65f3614f366d76f50d3aa64d127
+
+{"amount":1500,"currency":"LKR","paymentId":"PID_001","paperId":"PAPER_001"}

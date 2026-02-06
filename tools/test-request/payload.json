@@ -1,0 +1,13 @@
+{
+ "paymentId": "PID_123",
+  "amount": 1500,
+  "currency": "LKR",
+  "paperIds": [
+    "PAPER_001",
+    "PAPER_002"
+  ],
+  "questionIds": [
+    "Q_101",
+    "Q_102"
+  ]
+}

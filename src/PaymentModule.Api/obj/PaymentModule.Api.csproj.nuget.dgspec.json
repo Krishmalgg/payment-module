@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\PaymentModule.Api.csproj": {}
+    "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\PaymentModule.Api.csproj": {}
   },
   "projects": {
-    "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\PaymentModule.Api.csproj": {
+    "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\PaymentModule.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\PaymentModule.Api.csproj",
+        "projectUniqueName": "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\PaymentModule.Api.csproj",
         "projectName": "PaymentModule.Api",
-        "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\PaymentModule.Api.csproj",
+        "projectPath": "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\PaymentModule.Api.csproj",
         "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-        "outputPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Api\\obj\\",
+        "outputPath": "E:\\projects\\payment\\back end\\src\\paymentmodule.api\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -70,6 +70,10 @@
             "AspNetCoreRateLimit": {
               "target": "Package",
               "version": "[5.0.0, )"
+            },
+            "DotNetEnv": {
+              "target": "Package",
+              "version": "[3.1.1, )"
             },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
@@ -590,6 +594,10 @@
             "MediatR": {
               "target": "Package",
               "version": "[12.4.1, )"
+            },
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[10.0.1, )"
             }
           },
           "imports": [
@@ -925,6 +933,12 @@
       "frameworks": {
         "net10.0": {
           "targetAlias": "net10.0",
+          "dependencies": {
+            "MediatR.Contracts": {
+              "target": "Package",
+              "version": "[2.0.1, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -1276,9 +1290,17 @@
               "target": "Package",
               "version": "[10.0.1, )"
             },
+            "Microsoft.Extensions.Caching.Abstractions": {
+              "target": "Package",
+              "version": "[10.0.2, )"
+            },
             "Microsoft.Extensions.Hosting.Abstractions": {
               "target": "Package",
               "version": "[10.0.1, )"
+            },
+            "Microsoft.Extensions.Http": {
+              "target": "Package",
+              "version": "[10.0.2, )"
             },
             "Microsoft.Extensions.Http.Polly": {
               "target": "Package",
@@ -1291,6 +1313,10 @@
             "Polly": {
               "target": "Package",
               "version": "[8.5.0, )"
+            },
+            "RabbitMQ.Client": {
+              "target": "Package",
+              "version": "[7.2.0, )"
             }
           },
           "imports": [
