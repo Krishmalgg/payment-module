@@ -1,0 +1,17 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  PaymentModule.Domain -> E:\projects\payment\back end\src\PaymentModule.Domain\bin\Debug\net10.0\PaymentModule.Domain.dll
+  PaymentModule.Application -> E:\projects\payment\back end\src\PaymentModule.Application\bin\Debug\net10.0\PaymentModule.Application.dll
+E:\projects\payment\back end\src\PaymentModule.Infrastructure\Gateways\Adapters\PayHereAdapter.cs(20,31): error CS0535: 'PayHereAdapter' does not implement interface member 'IPaymentGateway.CreatePaymentIntent(TransactionId, Money, Dictionary<string, string>?, CancellationToken, string?)' [E:\projects\payment\back end\src\PaymentModule.Infrastructure\PaymentModule.Infrastructure.csproj]
+E:\projects\payment\back end\src\PaymentModule.Infrastructure\Gateways\Adapters\PayHereAdapter.cs(20,31): error CS0535: 'PayHereAdapter' does not implement interface member 'IPaymentGateway.InitiatePreapproval(string, Dictionary<string, string>?, CancellationToken)' [E:\projects\payment\back end\src\PaymentModule.Infrastructure\PaymentModule.Infrastructure.csproj]
+E:\projects\payment\back end\src\PaymentModule.Infrastructure\Gateways\Adapters\PayHereAdapter.cs(20,31): error CS0535: 'PayHereAdapter' does not implement interface member 'IPaymentGateway.HandleWebhook(string, IDictionary<string, string>, CancellationToken)' [E:\projects\payment\back end\src\PaymentModule.Infrastructure\PaymentModule.Infrastructure.csproj]
+
+Build FAILED.
+
+E:\projects\payment\back end\src\PaymentModule.Infrastructure\Gateways\Adapters\PayHereAdapter.cs(20,31): error CS0535: 'PayHereAdapter' does not implement interface member 'IPaymentGateway.CreatePaymentIntent(TransactionId, Money, Dictionary<string, string>?, CancellationToken, string?)' [E:\projects\payment\back end\src\PaymentModule.Infrastructure\PaymentModule.Infrastructure.csproj]
+E:\projects\payment\back end\src\PaymentModule.Infrastructure\Gateways\Adapters\PayHereAdapter.cs(20,31): error CS0535: 'PayHereAdapter' does not implement interface member 'IPaymentGateway.InitiatePreapproval(string, Dictionary<string, string>?, CancellationToken)' [E:\projects\payment\back end\src\PaymentModule.Infrastructure\PaymentModule.Infrastructure.csproj]
+E:\projects\payment\back end\src\PaymentModule.Infrastructure\Gateways\Adapters\PayHereAdapter.cs(20,31): error CS0535: 'PayHereAdapter' does not implement interface member 'IPaymentGateway.HandleWebhook(string, IDictionary<string, string>, CancellationToken)' [E:\projects\payment\back end\src\PaymentModule.Infrastructure\PaymentModule.Infrastructure.csproj]
+    0 Warning(s)
+    3 Error(s)
+
+Time Elapsed 00:00:02.05

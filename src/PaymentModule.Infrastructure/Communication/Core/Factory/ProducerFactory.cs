@@ -21,7 +21,7 @@ public class ProducerFactory
 
     public IMessageProducer GetProducer()
     {
-        var provider = _configuration["Messaging:Provider"] ?? "RabbitMq";
+        var provider = _configuration["PaymentServer:CommunicationMode"] ?? _configuration["Messaging:Provider"] ?? "RabbitMq";
         
         // Case-insensitive check
         if (string.Equals(provider, "Http", StringComparison.OrdinalIgnoreCase))

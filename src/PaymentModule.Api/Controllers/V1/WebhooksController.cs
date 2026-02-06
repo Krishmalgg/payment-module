@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 using PaymentModule.Application.Features.Payments.Commands.ProcessPayHereWebhook;
+using PaymentModule.Application.Features.Payments.Commands.ProcessAddCardWebhook;
 
 namespace PaymentModule.Api.Controllers.V1;
 
@@ -18,27 +20,42 @@ public class WebhooksController : ControllerBase
     [HttpPost("payhere")]
     public async Task<IActionResult> PayHereNotify(CancellationToken ct)
     {
-        Console.WriteLine($"[WebhooksController] Received PayHere Webhook. Content-Type: {Request.ContentType}");
-        
-        string payload;
-        if (Request.HasFormContentType)
-        {
-            // If it's a form post, reconstruct the payload string from the form collection
-            payload = string.Join("&", Request.Form.Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value.ToString())}"));
-            Console.WriteLine("  -> Captured from Form Content");
-        }
-        else
-        {
-            // Fallback to raw body reading
-            using var reader = new StreamReader(Request.Body);
-            payload = await reader.ReadToEndAsync(ct);
-            Console.WriteLine("  -> Captured from Raw Body");
-        }
-        
+        var payload = await ReadPayloadAsync(ct);
         var command = new ProcessPayHereWebhookCommand(payload);
         var result = await _mediator.Send(command, ct);
-        
         return Ok(result);
+    }
+
+    [HttpPost("payhere/add-card")]
+    public async Task<IActionResult> PayHereAddCardNotify(CancellationToken ct)
+    {
+        Console.WriteLine("Add Card Webhook");
+        var payload = await ReadPayloadAsync(ct);
+        var command = new ProcessAddCardWebhookCommand(payload);
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    [HttpPost("payhere/instant-payment")]
+    public async Task<IActionResult> PayHereInstantPaymentNotify(CancellationToken ct)
+    {
+        Console.WriteLine("[Webhook] Instant Payment Received");
+        var payload = await ReadPayloadAsync(ct);
+        // We can reuse the same command as it processes the same format
+        var command = new ProcessPayHereWebhookCommand(payload);
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
+    private async Task<string> ReadPayloadAsync(CancellationToken ct)
+    {
+        if (Request.HasFormContentType)
+        {
+            return string.Join("&", Request.Form.Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value.ToString())}"));
+        }
+
+        using var reader = new StreamReader(Request.Body);
+        return await reader.ReadToEndAsync(ct);
     }
 }
 

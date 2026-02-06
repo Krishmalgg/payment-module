@@ -121,8 +121,9 @@ builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PaperMaker
 
     if (!string.IsNullOrWhiteSpace(newSecret)) options.HmacSecrets.Add(newSecret);
     if (!string.IsNullOrWhiteSpace(oldSecret)) options.HmacSecrets.Add(oldSecret);
+    if (!string.IsNullOrWhiteSpace(oldSecret)) options.HmacSecrets.Add(oldSecret);
 });
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(); // Required for PayHereAdapter
 
 var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
 if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
@@ -137,6 +138,8 @@ else
 }
 
 // Infrastructure Services
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, PaymentModule.Api.Services.CurrentUserService>();
 builder.Services.AddScoped<IOutboxService, OutboxService>();
 builder.Services.AddSingleton<IOutboxTrigger, OutboxTrigger>();
 builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqConnection>();
@@ -157,6 +160,19 @@ builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Fa
 
 // Background Services
 builder.Services.AddHostedService<OutboxBackgroundService>();
+
+var communicationMode = builder.Configuration["PaymentServer:CommunicationMode"] ?? "RabbitMq";
+if (string.Equals(communicationMode, "RabbitMq", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.GetStoredCards.GetStoredCardsConsumer>();
+    builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.ReceiveAddCardRequests.AddCardConsumer>();
+    builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.ReceivePaymentCommands.PaymentIntentConsumer>();
+    Log.Information("[Configuration] RabbitMQ Consumers enabled (CommunicationMode: {Mode})", communicationMode);
+}
+else
+{
+    Log.Information("[Configuration] RabbitMQ Consumers disabled (CommunicationMode: {Mode})", communicationMode);
+}
 
 // Health Checks
 builder.Services.AddHealthChecks()

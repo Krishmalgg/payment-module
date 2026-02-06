@@ -35,7 +35,7 @@ public class HttpProducer : IMessageProducer
         _targetUrl = config["Messaging:Http:NotificationUrl"] ?? "http://localhost:5201/api/v1/notifications/suspicious";
     }
 
-    public async Task<ProducerResult> SendAsync(string endpointOrQueue, string payload, CancellationToken ct)
+    public async Task<ProducerResult> SendAsync(string endpointOrQueue, string payload, CancellationToken ct, string? correlationId = null)
     {
         try
         {

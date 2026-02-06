@@ -13,7 +13,8 @@ public record CreatePaymentIntentCommand(
     string? OrderId,
     string? Address,
     string? City,
-    string? Country
+    string? Country,
+    string? CustomerToken = null
 ) : IRequest<CreatePaymentIntentResponse>;
 
 public record CreatePaymentIntentResponse(

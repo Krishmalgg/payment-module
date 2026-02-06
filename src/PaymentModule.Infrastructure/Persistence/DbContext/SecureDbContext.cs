@@ -5,28 +5,59 @@ using PaymentModule.Domain.Entities;
 namespace PaymentModule.Infrastructure.Persistence.DbContext;
 
 using PaymentModule.Application.Common.Interfaces;
+using Microsoft.Extensions.Configuration;
+using PaymentModule.Infrastructure.Persistence.Converters;
 
 public class SecureDbContext : Microsoft.EntityFrameworkCore.DbContext, IApplicationDbContext
 {
     private readonly MediatR.IPublisher _publisher;
-    private readonly PaymentModule.Application.Common.Interfaces.IOutboxTrigger _trigger;
+    private readonly IOutboxTrigger _trigger;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IConfiguration _configuration;
 
     public SecureDbContext(
-        Microsoft.EntityFrameworkCore.DbContextOptions<SecureDbContext> options, 
+        DbContextOptions<SecureDbContext> options, 
         MediatR.IPublisher publisher,
-        PaymentModule.Application.Common.Interfaces.IOutboxTrigger trigger = null!) : base(options) 
+        IOutboxTrigger trigger,
+        ICurrentUserService currentUserService,
+        IConfiguration configuration) : base(options) 
     {
         _publisher = publisher;
         _trigger = trigger;
+        _currentUserService = currentUserService;
+        _configuration = configuration;
     }
 
     public Microsoft.EntityFrameworkCore.DbSet<Transaction> Transactions => Set<Transaction>();
+    public Microsoft.EntityFrameworkCore.DbSet<StoredCard> StoredCards => Set<StoredCard>();
     public Microsoft.EntityFrameworkCore.DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public Microsoft.EntityFrameworkCore.DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
     protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SecureDbContext).Assembly);
+
+        // --- Row-Level Security (Global Query Filter) ---
+        // Only allow users to see their own cards
+        // IMPORTANT: System processes (webhooks, etc.) must use .IgnoreQueryFilters()
+        modelBuilder.Entity<StoredCard>().HasQueryFilter(x => x.UserId == _currentUserService.UserId);
+
+        // --- Column Encryption ---
+        var isEncryptionEnabled = _configuration.GetValue<bool>("Security:IsEncryptStoredData");
+        
+        if (isEncryptionEnabled)
+        {
+            var key = _configuration.GetValue<string>("Security:EncryptionKey");
+            if (!string.IsNullOrEmpty(key))
+            {
+                var converter = new AesEncryptionConverter(key);
+
+                modelBuilder.Entity<StoredCard>().Property(e => e.CustomerToken).HasConversion(converter);
+                modelBuilder.Entity<StoredCard>().Property(e => e.CardHolderName).HasConversion(converter);
+                modelBuilder.Entity<StoredCard>().Property(e => e.CardNo).HasConversion(converter);
+                modelBuilder.Entity<StoredCard>().Property(e => e.CardType).HasConversion(converter);
+            }
+        }
 
         modelBuilder.Ignore<DomainEvent>();
 

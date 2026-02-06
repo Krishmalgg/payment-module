@@ -34,7 +34,10 @@ public class S2SSecurityMiddleware
             return;
         }
 
-        if (!context.Request.Path.StartsWithSegments("/api/v1/payments/intents"))
+        if (!context.Request.Path.StartsWithSegments("/api/v1/payments/intents") &&
+            !context.Request.Path.StartsWithSegments("/api/v1/payments/add-card") &&
+            !context.Request.Path.StartsWithSegments("/api/v1/communication/add-card") &&
+            !context.Request.Path.StartsWithSegments("/api/v1/payments/stored-cards"))
         {
             await _next(context);
             return;

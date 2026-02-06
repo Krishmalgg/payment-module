@@ -20,7 +20,7 @@ public class RabbitMqProducer : IMessageProducer
         _logger = logger;
     }
 
-    public async Task<ProducerResult> SendAsync(string queue, string payload, CancellationToken ct)
+    public async Task<ProducerResult> SendAsync(string queue, string payload, CancellationToken ct, string? correlationId = null)
     {
         try
         {
@@ -50,6 +50,11 @@ public class RabbitMqProducer : IMessageProducer
             {
                 Persistent = true // Message survives restart
             };
+
+            if (!string.IsNullOrEmpty(correlationId))
+            {
+                properties.CorrelationId = correlationId;
+            }
 
             // 5. Publish
             _logger.LogInformation("Publishing to RabbitMQ Queue: {Queue}", queue);

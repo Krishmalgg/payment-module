@@ -77,9 +77,10 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(x => x.UpdatedAt)
             .HasColumnName("updated_at");
         
-        // Indexes for performance
+        // Indexes for performance and uniqueness
         builder.HasIndex(x => x.OrderId)
-            .HasDatabaseName("idx_transactions_order_id");
+            .HasDatabaseName("idx_transactions_order_id")
+            .IsUnique();
         
         builder.HasIndex(x => x.UserId)
             .HasDatabaseName("idx_transactions_user_id");

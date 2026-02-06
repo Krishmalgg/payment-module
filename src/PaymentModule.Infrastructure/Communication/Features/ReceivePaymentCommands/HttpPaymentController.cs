@@ -1,1 +1,0 @@
-// HttpPaymentController.cs - HTTP Endpoint

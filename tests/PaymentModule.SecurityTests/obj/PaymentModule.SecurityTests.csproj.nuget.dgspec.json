@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "e:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj": {}
+    "E:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj": {}
   },
   "projects": {
-    "e:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj": {
+    "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "e:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj",
+        "projectUniqueName": "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj",
         "projectName": "PaymentModule.Application",
-        "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj",
+        "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj",
         "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-        "outputPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Application\\obj\\",
+        "outputPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -26,8 +26,8 @@
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj": {
-                "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj"
+              "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj": {
+                "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj"
               }
             }
           }
@@ -359,14 +359,14 @@
         }
       }
     },
-    "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj": {
+    "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj",
+        "projectUniqueName": "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj",
         "projectName": "PaymentModule.Domain",
-        "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj",
+        "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj",
         "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-        "outputPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\obj\\",
+        "outputPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -698,14 +698,14 @@
         }
       }
     },
-    "e:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj": {
+    "E:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "e:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj",
+        "projectUniqueName": "E:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj",
         "projectName": "PaymentModule.Infrastructure",
-        "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj",
+        "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-        "outputPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\obj\\",
+        "outputPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -720,11 +720,11 @@
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "e:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj": {
-                "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj"
+              "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj": {
+                "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj"
               },
-              "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj": {
-                "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj"
+              "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj": {
+                "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Domain\\PaymentModule.Domain.csproj"
               }
             }
           }
@@ -1070,14 +1070,14 @@
         }
       }
     },
-    "e:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj": {
+    "E:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "e:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj",
+        "projectUniqueName": "E:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj",
         "projectName": "PaymentModule.SecurityTests",
-        "projectPath": "e:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj",
+        "projectPath": "E:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\PaymentModule.SecurityTests.csproj",
         "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-        "outputPath": "e:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\obj\\",
+        "outputPath": "E:\\projects\\payment\\back end\\tests\\PaymentModule.SecurityTests\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -1092,8 +1092,8 @@
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "e:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj": {
-                "projectPath": "e:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj"
+              "E:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj": {
+                "projectPath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Infrastructure\\PaymentModule.Infrastructure.csproj"
               }
             }
           }

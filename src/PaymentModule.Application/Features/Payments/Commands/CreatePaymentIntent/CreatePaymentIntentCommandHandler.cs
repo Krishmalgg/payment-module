@@ -1,4 +1,6 @@
 using MediatR;
+using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
 using PaymentModule.Application.Common.Interfaces;
 using PaymentModule.Domain.Ports;
 using PaymentModule.Domain.ValueObjects;
@@ -32,6 +34,7 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
         // Add standard fields for Gateway
         if (!string.IsNullOrEmpty(request.Email)) metadata["email"] = request.Email;
         if (!string.IsNullOrEmpty(request.OrderId)) metadata["order_id"] = request.OrderId;
+        if (!string.IsNullOrEmpty(request.UserId)) metadata["user_id"] = request.UserId;
         if (!string.IsNullOrEmpty(request.Address)) metadata["address"] = request.Address;
         if (!string.IsNullOrEmpty(request.City)) metadata["city"] = request.City;
         if (!string.IsNullOrEmpty(request.Country)) metadata["country"] = request.Country;
@@ -68,33 +71,46 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
         var transactionIdGuid = Guid.NewGuid(); // Fallback
 
 
-        // Call gateway to get fields and hash
+        // Create Transaction entity BEFORE calling gateway
+        // This ensures the record is ready for the webhook even if it arrives instantly.
+        var transaction = new Transaction(
+            transactionIdGuid,
+            request.OrderId!,
+            userIdGuid,
+            request.Amount,
+            request.Currency,
+            "PAYHERE", // We know we are using PayHere in this slice
+            request.UserName ?? throw new ArgumentException("UserName is required"),
+            request.Email
+        );
+
+        // --- PRE-PERSISTENCE (Avoid Race Condition) ---
+        try
+        {
+            _dbContext.Transactions.Add(transaction);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            Console.WriteLine($"[CommandHandler] Transaction {transaction.OrderId} pre-registered as PENDING.");
+        }
+        catch (DbUpdateException)
+        {
+            // If the webhook somehow arrived and created the record before we even finished this save
+            Console.WriteLine($"[CommandHandler] Note: Transaction {transaction.OrderId} was already registered by webhook.");
+        }
+
+        // Call gateway to get fields and hash (This is where the charge happens for instant pay)
         var result = await _paymentGateway.CreatePaymentIntent(
             new TransactionId(transactionIdGuid), 
             money,
             metadata,
-            cancellationToken
+            cancellationToken,
+            request.CustomerToken
         );
+
+        Console.WriteLine("[CommandHandler] Gateway Response Action: " + result.Action);
         foreach (var field in result.Fields)
         {
              Console.WriteLine($"  -> {field.Key}: {field.Value}");
         }
-
-        // Create Transaction with provider from gateway result
-        // Use the actual OrderId generated for the gateway to ensure consistency during webhook lookups
-        var transaction = new Transaction(
-            transactionIdGuid,
-            result.Fields.ContainsKey("order_id") ? result.Fields["order_id"] : request.OrderId!,
-            userIdGuid,
-            request.Amount,
-            request.Currency,
-            result.Gateway.ToUpperInvariant(),
-            request.UserName ?? throw new ArgumentException("UserName is required"),
-            request.Email
-        );
-        
-        _dbContext.Transactions.Add(transaction);
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return new CreatePaymentIntentResponse(
             Gateway: result.Gateway,

@@ -1,13 +1,20 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.Extensions.Options;
 using PaymentModule.Domain.Ports;
 using PaymentModule.Domain.ValueObjects;
-using PaymentModule.Infrastructure.Gateways;
+using PaymentModule.Infrastructure.Gateways.PayHere;
 using PaymentModule.Infrastructure.Configuration;
 using Polly;
 using Polly.Registry;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using System;
+using Microsoft.Extensions.Caching.Memory; // Required for Set extension method
 
 namespace PaymentModule.Infrastructure.Gateways.Adapters;
 
@@ -15,51 +22,78 @@ public class PayHereAdapter : IPaymentGateway
 {
     private readonly PayHereOptions _options;
     private readonly ResiliencePipeline _pipeline;
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<PayHereAdapter> _logger;
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
 
-    public PayHereAdapter(IOptions<PayHereOptions> options, ResiliencePipelineProvider<string> pipelineProvider)
+    public PayHereAdapter(
+        IOptions<PayHereOptions> options, 
+        ResiliencePipelineProvider<string> pipelineProvider,
+        IHttpClientFactory httpClientFactory,
+        ILogger<PayHereAdapter> logger,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     {
         _options = options.Value;
         _pipeline = pipelineProvider.GetPipeline("payment-gateway");
+        _httpClient = httpClientFactory.CreateClient();
+        _logger = logger;
+        _cache = cache;
     }
 
-    public Task<PaymentIntentResult> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct)
+    public async Task<PaymentIntentResult> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct, string? customerToken = null)
     {
-        // Wrap execution with Polly logic if making direct HTTP calls
-        // In this specific adapter, we are constructing a form, but we should prepare the pipeline for when we add direct API calls (e.g. status check)
-        if (metadata != null)
+        var orderId = metadata != null && metadata.TryGetValue("order_id", out var metaOrderId) ? metaOrderId : id.Value.ToString();
+        var amountStr = amount.Value.ToString("0.00", CultureInfo.InvariantCulture);
+
+        // --- Instant Payment Flow ---
+        if (!string.IsNullOrEmpty(customerToken))
         {
-            Console.WriteLine("Metadata contents:");
-            foreach (var kvp in metadata)
+            _logger.LogInformation("Customer Token found. Attempting instant charge for Order {OrderId}", orderId);
+            try 
             {
-                Console.WriteLine($"  Key: {kvp.Key}, Value: {kvp.Value}");
+                var chargeResult = await ChargeCustomerAsync(orderId, amountStr, amount.Currency, customerToken, metadata, ct);
+                if (chargeResult)
+                {
+                    return new PaymentIntentResult(
+                        "payhere",
+                        "PROCESSING", // Changed from SUCCESS
+                        "",
+                        new Dictionary<string, string>
+                        {
+                            ["order_id"] = orderId,
+                            ["amount"] = amountStr,
+                            ["currency"] = amount.Currency,
+                            ["customer_token"] = customerToken,
+                            ["info"] = "Instant charge initiated. Final status pending webhook."
+                        }
+                    );
+                }
+                else
+                {
+                     _logger.LogWarning("Instant charge failed for Order {OrderId}.", orderId);
+                     throw new Exception("Instant charge failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                 _logger.LogError(ex, "Error processing instant charge for Order {OrderId}", orderId);
+                  throw;
             }
         }
-        else
-        {
-            Console.WriteLine("Metadata is null");
-        }
 
-        var orderId = metadata != null && metadata.TryGetValue("order_id", out var metaOrderId) ? metaOrderId : "0";
-        var amountStr = amount.Value.ToString("0.00", CultureInfo.InvariantCulture);
-        Console.WriteLine("PayHere Adapter: ");
-        Console.WriteLine($"Merchant ID: {_options.MerchantId}");
-        Console.WriteLine($"Order ID: {orderId}");
-        Console.WriteLine($"Amount: {amountStr}");
-        Console.WriteLine($"Currency: {amount.Currency}");
-        Console.WriteLine($"Merchant Secret: {_options.MerchantSecret}");
-        var secretMd5 = MD5.HashData(Encoding.UTF8.GetBytes(_options.MerchantSecret));
-        var secretHash = Convert.ToHexString(secretMd5).ToUpperInvariant();
-
-        var signatureSource = _options.MerchantId + orderId + amountStr + amount.Currency + secretHash;
-        var md5 = MD5.HashData(Encoding.UTF8.GetBytes(signatureSource));
-        var hash = Convert.ToHexString(md5).ToUpperInvariant();
+        var hash = PayHereSecurity.GenerateHash(
+            _options.MerchantId, 
+            orderId, 
+            amountStr, 
+            amount.Currency, 
+            _options.MerchantSecret);
 
         var fields = new Dictionary<string, string>
         {
             ["merchant_id"] = _options.MerchantId,
             ["return_url"] = _options.ReturnUrl,
             ["cancel_url"] = _options.CancelUrl,
-            ["notify_url"] = "https://c0c852ea24b7.ngrok-free.app/api/v1/webhooks/payhere",
+            ["notify_url"] = _options.CheckoutNotifyUrl,
             ["order_id"] = orderId,
             ["items"] = metadata != null && metadata.TryGetValue("items", out var items) ? items : "Payment",
             ["amount"] = amountStr,
@@ -72,80 +106,194 @@ public class PayHereAdapter : IPaymentGateway
             ["city"] = metadata != null && metadata.TryGetValue("city", out var ci) ? ci : "",
             ["country"] = metadata != null && metadata.TryGetValue("country", out var co) ? co : ""
         };
-        Console.WriteLine("PayHere Fields:");
-        foreach (var kvp in fields)
-        {
-            Console.WriteLine($"{kvp.Key}: {kvp.Value}");
-        }
 
-        var result = new PaymentIntentResult(
+        return new PaymentIntentResult(
             Gateway: "payhere",
             Action: "form_post",
             Url: _options.CheckoutUrl,
             Fields: fields
         );
-        Console.WriteLine("PayHere Result: "+result);
-        return Task.FromResult(result);
     }
 
-    public Task<object> HandleWebhook(string payload, IDictionary<string, string> headers, CancellationToken ct)
+    public Task<PreapprovalResult> InitiatePreapproval(string orderId, Dictionary<string, string>? metadata, CancellationToken ct)
     {
-        Console.WriteLine("[PayHereAdapter] Analyzing Webhook Payload...");
-        Console.WriteLine($"  -> Raw Payload: {payload}");
-        
+        var hash = PayHereSecurity.GeneratePreapprovalHash(
+            _options.MerchantId, 
+            orderId, 
+            _options.DefaultCurrency,
+            _options.PreapprovalAmount,
+            _options.MerchantSecret);
+
+        var fields = new Dictionary<string, string>
+        {
+            ["merchant_id"] = _options.MerchantId,
+            ["return_url"] = _options.ReturnUrl,
+            ["notify_url"] = _options.PreapprovalNotifyUrl, 
+            ["order_id"] = orderId,
+            ["items"] = "Add Card",
+            ["currency"] = _options.DefaultCurrency,
+            ["amount"] = _options.PreapprovalAmount,
+            ["hash"] = hash,
+        };
+
+        return Task.FromResult(new PreapprovalResult(
+            Gateway: "payhere",
+            Action: "form_post",
+            Url: _options.PreapprovalUrl,
+            Fields: fields
+        ));
+    }
+
+    public Task<WebhookResult> HandleWebhook(string payload, IDictionary<string, string> headers, CancellationToken ct)
+    {
         var form = ParseForm(payload);
-        Console.WriteLine($"  -> Keys found: {string.Join(", ", form.Keys)}");
         
         var hasMerchantId = form.TryGetValue("merchant_id", out var merchantId);
         var hasOrderId = form.TryGetValue("order_id", out var orderId);
-        var hasAmount = form.TryGetValue("payhere_amount", out var amount); // Note: PayHere uses payhere_amount in notify
+        var hasAmount = form.TryGetValue("payhere_amount", out var amount); 
         var hasCurrency = form.TryGetValue("payhere_currency", out var currency);
         var hasStatus = form.TryGetValue("status_code", out var statusCode);
         var hasSignature = form.TryGetValue("md5sig", out var remoteSig);
 
         if (!hasMerchantId || !hasOrderId || !hasAmount || !hasCurrency || !hasStatus || !hasSignature)
         {
-            Console.WriteLine("  -> ❌ Missing required fields in form payload.");
-            return Task.FromResult<object>(new { ok = false });
+            return Task.FromResult(new WebhookResult(false, orderId ?? "", statusCode ?? "", ErrorMessage: "Missing required fields"));
         }
 
-        Console.WriteLine($"  -> MerchantID: {merchantId}");
-        Console.WriteLine($"  -> OrderID: {orderId}");
-        Console.WriteLine($"  -> Amount: {amount}");
-        Console.WriteLine($"  -> Status: {statusCode}");
+        var isOk = PayHereSecurity.VerifyNotificationSignature(
+            merchantId!, 
+            orderId!, 
+            amount!, 
+            currency!, 
+            statusCode!, 
+            _options.MerchantSecret, 
+            remoteSig!);
 
-        // PayHere Signature Logic:
-        // md5sig = Upper(md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + Upper(md5(merchant_secret))))
+        var result = new WebhookResult(
+            IsSuccess: isOk,
+            OrderId: orderId ?? string.Empty,
+            StatusCode: statusCode ?? string.Empty,
+            Amount: amount,
+            Currency: currency,
+            ProviderReference: form.GetValueOrDefault("payment_id", ""),
+            CustomerToken: form.GetValueOrDefault("customer_token", ""),
+            CardHolderName: form.GetValueOrDefault("card_holder_name", ""),
+            CardNo: form.GetValueOrDefault("card_no", ""),
+            CardExpiry: form.GetValueOrDefault("card_expiry", ""),
+            CardType: form.GetValueOrDefault("method", ""),
+            Custom1: form.GetValueOrDefault("custom_1", ""),
+            Custom2: form.GetValueOrDefault("custom_2", "")
+        );
         
-        var secretMd5 = MD5.HashData(Encoding.UTF8.GetBytes(_options.MerchantSecret));
-        var secretHash = Convert.ToHexString(secretMd5).ToUpperInvariant();
+        return Task.FromResult(result);
+    }
 
-        var signatureSource = merchantId + orderId + amount + currency + statusCode + secretHash;
-        var md5 = MD5.HashData(Encoding.UTF8.GetBytes(signatureSource));
-        var localSig = Convert.ToHexString(md5).ToUpperInvariant();
-
-        var isOk = localSig == remoteSig?.ToUpperInvariant();
-
-        if (isOk)
+    private async Task<bool> ChargeCustomerAsync(string orderId, string amount, string currency, string customerToken, Dictionary<string, string>? metadata, CancellationToken ct)
+    {
+        try 
         {
-             Console.WriteLine("  -> ✅ Signature Match!");
+            var accessToken = await GetAccessTokenAsync(ct);
+
+            var payload = new
+            {
+                order_id = orderId,
+                items = metadata?.GetValueOrDefault("items") ?? "Payment",
+                currency = currency,
+                amount = double.Parse(amount),
+                customer_token = customerToken,
+                notify_url = _options.InstantPayNotifyUrl,
+                custom_1 = metadata?.GetValueOrDefault("user_id"),
+                custom_2 = metadata?.GetValueOrDefault("email")
+            };
+
+            var requestUri = "https://sandbox.payhere.lk/merchant/v1/payment/charge";
+
+            var response = await _pipeline.ExecuteAsync(async token => 
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+                {
+                    Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json"),
+                    Headers = { { "Authorization", $"Bearer {accessToken}" } }
+                };
+
+                var res = await _httpClient.SendAsync(request, token);
+                
+                if ((int)res.StatusCode >= 500 || res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    res.EnsureSuccessStatusCode();
+                }
+
+                return res;
+            }, ct);
+            Console.WriteLine($"response response : {response.StatusCode}"); // Fixed syntax
+            
+            var content = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogInformation("PayHere Charge Response: {Response}", content);
+
+            if (!response.IsSuccessStatusCode) return false;
+
+            using var doc = JsonDocument.Parse(content);
+            if (doc.RootElement.TryGetProperty("status", out var statusProp))
+            {
+                return statusProp.GetInt32() == 1;
+            }
+            
+            return false;
         }
-        else
+        catch (Exception ex)
         {
-             Console.WriteLine($"  -> ❌ Signature Mismatch. Local: {localSig}, Remote: {remoteSig}");
+            _logger.LogError(ex, "ChargeCustomerAsync failed after retries.");
+            throw;
         }
+    }
 
-        var result = new Dictionary<string, object>
-        {
-            ["ok"] = isOk,
-            ["orderId"] = orderId ?? string.Empty,
-            ["status"] = statusCode ?? string.Empty,
-            ["amount"] = amount ?? string.Empty,
-            ["currency"] = currency ?? string.Empty,
-            ["paymentId"] = form.TryGetValue("payment_id", out var pid) ? pid : ""
-        };
-        
-        return Task.FromResult<object>(result);
+    private async Task<string> GetAccessTokenAsync(CancellationToken ct)
+    {
+         const string cacheKey = "PayHere_AccessToken";
+         
+         if (_cache.TryGetValue(cacheKey, out string? cachedToken))
+         {
+             _logger.LogInformation("Using cached PayHere access token.");
+             return cachedToken!;
+         }
+
+         _logger.LogInformation("Fetching new PayHere access token...");
+         var authToken = System.Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{_options.AppId}:{_options.AppSecret}"));
+         var requestUri = "https://sandbox.payhere.lk/merchant/v1/oauth/token";
+
+         var response = await _pipeline.ExecuteAsync(async token => 
+         {
+             var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+             {
+                 Content = new FormUrlEncodedContent(new[]
+                 {
+                     new KeyValuePair<string, string>("grant_type", "client_credentials")
+                 }),
+                 Headers = { { "Authorization", $"Basic {authToken}" } }
+             };
+
+             var res = await _httpClient.SendAsync(request, token);
+             
+             if ((int)res.StatusCode >= 500 || res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+             {
+                 res.EnsureSuccessStatusCode();
+             }
+             
+             return res;
+         }, ct);
+
+         response.EnsureSuccessStatusCode();
+         
+         var content = await response.Content.ReadAsStringAsync(ct);
+         using var doc = JsonDocument.Parse(content);
+         var newToken = doc.RootElement.GetProperty("access_token").GetString()!;
+
+         var cacheOptions = new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions()
+            .SetAbsoluteExpiration(TimeSpan.FromMinutes(50));
+         
+         _cache.Set(cacheKey, newToken, cacheOptions);
+         
+         return newToken;
     }
 
     private static Dictionary<string, string> ParseForm(string payload)
@@ -163,4 +311,3 @@ public class PayHereAdapter : IPaymentGateway
         return dict;
     }
 }
-
