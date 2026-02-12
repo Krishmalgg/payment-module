@@ -113,6 +113,7 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
         }
 
         return new CreatePaymentIntentResponse(
+            TransactionId: transaction.Id.ToString(),
             Gateway: result.Gateway,
             Action: result.Action,
             Url: result.Url,

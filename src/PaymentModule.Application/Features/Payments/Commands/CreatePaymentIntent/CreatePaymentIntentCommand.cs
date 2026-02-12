@@ -18,6 +18,7 @@ public record CreatePaymentIntentCommand(
 ) : IRequest<CreatePaymentIntentResponse>;
 
 public record CreatePaymentIntentResponse(
+    string TransactionId,
     string Gateway,
     string Action,
     string Url,

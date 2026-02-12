@@ -32,6 +32,8 @@ public class SecureDbContext : Microsoft.EntityFrameworkCore.DbContext, IApplica
     public Microsoft.EntityFrameworkCore.DbSet<StoredCard> StoredCards => Set<StoredCard>();
     public Microsoft.EntityFrameworkCore.DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public Microsoft.EntityFrameworkCore.DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public Microsoft.EntityFrameworkCore.DbSet<Refund> Refunds => Set<Refund>();
+    public Microsoft.EntityFrameworkCore.DbSet<DeadLetterQueue> DeadLetterQueues => Set<DeadLetterQueue>();
 
     protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
     {

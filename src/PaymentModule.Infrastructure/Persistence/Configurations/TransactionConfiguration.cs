@@ -26,7 +26,6 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(x => x.UserId)
             .HasColumnName("user_id")
             .IsRequired();
-        
         // Payment Details
         builder.Property(x => x.Amount)
             .HasColumnName("amount")

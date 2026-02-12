@@ -63,6 +63,10 @@
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
               "version": "[10.0.1, )"
+            },
+            "Polly": {
+              "target": "Package",
+              "version": "[8.5.0, )"
             }
           },
           "imports": [

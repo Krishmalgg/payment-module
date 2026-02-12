@@ -37,6 +37,7 @@ public class S2SSecurityMiddleware
         if (!context.Request.Path.StartsWithSegments("/api/v1/payments/intents") &&
             !context.Request.Path.StartsWithSegments("/api/v1/payments/add-card") &&
             !context.Request.Path.StartsWithSegments("/api/v1/communication/add-card") &&
+            !context.Request.Path.StartsWithSegments("/api/v1/payments/refund") &&
             !context.Request.Path.StartsWithSegments("/api/v1/payments/stored-cards"))
         {
             await _next(context);
@@ -59,6 +60,16 @@ public class S2SSecurityMiddleware
         context.Request.EnableBuffering();
         
         if (!await CheckHmacSignature(context)) return;
+
+        // // Log the refund payload if checking refund endpoint
+        // if (context.Request.Path.StartsWithSegments("/api/v1/payments/refund"))
+        // {
+        //     context.Request.Body.Position = 0;
+        //     using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen: true);
+        //     var body = await reader.ReadToEndAsync();
+        //     _logger.LogInformation("Incoming Refund Request Payload: {Payload}", body);
+        //     context.Request.Body.Position = 0;
+        // }
 
         context.Request.Body.Position = 0; // Reset for next middleware
         await _next(context);

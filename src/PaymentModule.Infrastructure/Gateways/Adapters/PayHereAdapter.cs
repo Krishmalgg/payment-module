@@ -296,6 +296,102 @@ public class PayHereAdapter : IPaymentGateway
          return newToken;
     }
 
+    public async Task<PaymentModule.Domain.ValueObjects.RefundResult> RefundAsync(
+        string providerRefId,
+        decimal amount,
+        string currency,
+        string description,
+        CancellationToken ct)
+    {
+        try
+        {
+            var accessToken = await GetAccessTokenAsync(ct);
+            var requestUri = "https://sandbox.payhere.lk/merchant/v1/payment/refund";
+
+            _logger.LogInformation("Initiating refund for Payment ID: {PaymentId}, Amount: {Amount}", 
+                providerRefId, amount);
+
+            var request = new PaymentModule.Infrastructure.Gateways.PayHere.DTOs.PayHereRefundRequestDto
+            {
+                PaymentId = providerRefId,
+                Description = description,
+                Amount = amount,
+                Currency = currency
+            };
+
+            var requestJson = System.Text.Json.JsonSerializer.Serialize(request);
+            _logger.LogInformation("PayHere Refund Request Payload: {Payload}", requestJson);
+
+            var response = await _pipeline.ExecuteAsync(async token =>
+            {
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
+                {
+                    Content = new StringContent(
+                        requestJson, 
+                        System.Text.Encoding.UTF8, 
+                        "application/json"),
+                    Headers = { { "Authorization", $"Bearer {accessToken}" } }
+                };
+
+                var res = await _httpClient.SendAsync(httpRequest, token);
+
+                // Retry on server errors or rate limiting
+                if ((int)res.StatusCode >= 500 || res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    res.EnsureSuccessStatusCode();
+                }
+
+                return res;
+            }, ct);
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogInformation("PayHere Refund Response: {Response}", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("PayHere refund failed with status code: {StatusCode}", response.StatusCode);
+                return new PaymentModule.Domain.ValueObjects.RefundResult(
+                    IsSuccess: false,
+                    Status: "FAILED",
+                    ProviderRefundId: null,
+                    ErrorMessage: $"HTTP {response.StatusCode}: {content}"
+                );
+            }
+
+            // Parse successful response
+            var refundResponse = System.Text.Json.JsonSerializer.Deserialize<PaymentModule.Infrastructure.Gateways.PayHere.DTOs.PayHereRefundResponseDto>(
+                content, 
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (refundResponse == null)
+            {
+                return new PaymentModule.Domain.ValueObjects.RefundResult(
+                    IsSuccess: false,
+                    Status: "FAILED",
+                    ProviderRefundId: null,
+                    ErrorMessage: "Failed to parse PayHere response"
+                );
+            }
+
+            return new PaymentModule.Domain.ValueObjects.RefundResult(
+                IsSuccess: refundResponse.IsSuccess,
+                Status: refundResponse.GlobalStatus,
+                ProviderRefundId: refundResponse.ProviderRefundId,
+                ErrorMessage: refundResponse.Error
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RefundAsync failed after retries for Payment ID: {PaymentId}", providerRefId);
+            return new PaymentModule.Domain.ValueObjects.RefundResult(
+                IsSuccess: false,
+                Status: "FAILED",
+                ProviderRefundId: null,
+                ErrorMessage: ex.Message
+            );
+        }
+    }
+
     private static Dictionary<string, string> ParseForm(string payload)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

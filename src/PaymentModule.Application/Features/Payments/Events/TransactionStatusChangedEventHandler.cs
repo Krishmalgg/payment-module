@@ -29,6 +29,13 @@ public class TransactionStatusChangedEventHandler : INotificationHandler<Transac
             return;
         }
 
+        // Skip webhook for REFUNDED status - refund results are returned synchronously
+        if (notification.NewStatus == "REFUNDED")
+        {
+            _logger.LogInformation("Skipping webhook for REFUNDED status - refund handled synchronously");
+            return;
+        }
+
         // Use the centralized notifier feature
         // This internally handles serialization and adding to the outbox with the correct type "PaymentStatus"
         await _paymentStatusNotifier.NotifyAsync(new PaymentStatusPayload

@@ -167,6 +167,7 @@ if (string.Equals(communicationMode, "RabbitMq", StringComparison.OrdinalIgnoreC
     builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.GetStoredCards.GetStoredCardsConsumer>();
     builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.ReceiveAddCardRequests.AddCardConsumer>();
     builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.ReceivePaymentCommands.PaymentIntentConsumer>();
+    builder.Services.AddHostedService<PaymentModule.Infrastructure.Communication.Features.ReceiveRefundCommands.RefundConsumer>();
     Log.Information("[Configuration] RabbitMQ Consumers enabled (CommunicationMode: {Mode})", communicationMode);
 }
 else

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "rpXnA1frC3I=",
+  "dgSpecHash": "frtEmnL2QKQ=",
   "success": true,
   "projectFilePath": "E:\\projects\\payment\\back end\\src\\PaymentModule.Application\\PaymentModule.Application.csproj",
   "expectedPackageFiles": [
@@ -18,7 +18,9 @@
     "C:\\Users\\ASUS\\.nuget\\packages\\microsoft.extensions.logging\\10.0.1\\microsoft.extensions.logging.10.0.1.nupkg.sha512",
     "C:\\Users\\ASUS\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\10.0.1\\microsoft.extensions.logging.abstractions.10.0.1.nupkg.sha512",
     "C:\\Users\\ASUS\\.nuget\\packages\\microsoft.extensions.options\\10.0.1\\microsoft.extensions.options.10.0.1.nupkg.sha512",
-    "C:\\Users\\ASUS\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.1\\microsoft.extensions.primitives.10.0.1.nupkg.sha512"
+    "C:\\Users\\ASUS\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.1\\microsoft.extensions.primitives.10.0.1.nupkg.sha512",
+    "C:\\Users\\ASUS\\.nuget\\packages\\polly\\8.5.0\\polly.8.5.0.nupkg.sha512",
+    "C:\\Users\\ASUS\\.nuget\\packages\\polly.core\\8.5.0\\polly.core.8.5.0.nupkg.sha512"
   ],
   "logs": []
 }

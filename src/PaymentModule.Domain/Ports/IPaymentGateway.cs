@@ -8,4 +8,5 @@ public interface IPaymentGateway
     Task<PaymentIntentResult> CreatePaymentIntent(TransactionId id, Money amount, Dictionary<string, string>? metadata, CancellationToken ct, string? customerToken = null);
     Task<PreapprovalResult> InitiatePreapproval(string orderId, Dictionary<string, string>? metadata, CancellationToken ct);
     Task<WebhookResult> HandleWebhook(string payload, IDictionary<string, string> headers, CancellationToken ct);
+    Task<RefundResult> RefundAsync(string providerRefId, decimal amount, string currency, string description, CancellationToken ct);
 }

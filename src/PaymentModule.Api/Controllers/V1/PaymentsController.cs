@@ -25,6 +25,9 @@ public class PaymentsController : ControllerBase
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
         CancellationToken ct)
     {
+        // Log the incoming payload to the console
+        var payloadJson = JsonSerializer.Serialize(command);
+        Console.WriteLine($"[CreateIntent] Incoming payload: {payloadJson}");
         var commandWithKey = command with { IdempotencyKey = idempotencyKey };
         var result = await _mediator.Send(commandWithKey, ct);
         return Ok(result);
