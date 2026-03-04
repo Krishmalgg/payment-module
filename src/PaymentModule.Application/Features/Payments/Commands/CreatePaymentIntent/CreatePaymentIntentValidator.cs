@@ -16,13 +16,19 @@ public class CreatePaymentIntentValidator : AbstractValidator<CreatePaymentInten
 
         RuleFor(x => x.Currency)
             .NotEmpty()
-            .WithMessage("Currency is required")
+            .WithMessage("Currency is required");
+
+        RuleFor(x => x.Currency)
             .Must(BeValidCurrency)
-            .WithMessage("Currency must be a valid ISO 4217 code (e.g., LKR, USD, EUR)");
+            .WithMessage("Currency must be a valid ISO 4217 code (e.g., LKR, USD, EUR)")
+            .When(x => !string.IsNullOrWhiteSpace(x.Currency));
     }
 
     private bool BeValidCurrency(string currency)
     {
+        if (string.IsNullOrWhiteSpace(currency))
+            return false;
+
         var validCurrencies = new[] { "LKR", "USD", "EUR", "GBP", "INR", "AUD", "CAD" };
         return validCurrencies.Contains(currency.ToUpperInvariant());
     }

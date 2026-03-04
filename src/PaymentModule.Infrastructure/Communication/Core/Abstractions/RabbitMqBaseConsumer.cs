@@ -1,35 +1,65 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using PaymentModule.Infrastructure.Communication.Core.Connection;
+using PaymentModule.Infrastructure.Persistence.DbContext;
+using PaymentModule.Domain.Entities;
 using System.Text;
 
 namespace PaymentModule.Infrastructure.Communication.Core.Abstractions;
 
 /// <summary>
-/// Abstract base class for RabbitMQ Consumers.
-/// Manages the connection, channel and basic consumer setup.
+/// Abstract base class for all RabbitMQ consumers.
+///
+/// CONCURRENCY:
+///   Up to MaxConcurrency (10) messages are processed simultaneously.
+///   OnMessageReceivedAsync returns immediately after dispatching each message
+///   to a Task.Run worker — the channel is never blocked waiting for processing.
+///
+/// RETRY STRATEGY (per message, non-blocking):
+///   Attempt 1 — immediately
+///   Attempt 2 — immediately (no delay)
+///   Attempt 3 — immediately (no delay)
+///   After attempt 3 → store in DeadLetterQueue table, Nack without requeue.
+///
+/// SECURITY:
+///   • Timestamp validation — rejects messages older than 5 s (replay prevention).
+///     NOTE: If the Main Server does not set AmqpTimestamp, override SkipTimestampValidation = true
+///           in the concrete consumer to disable this check for that queue.
 /// </summary>
 public abstract class RabbitMqBaseConsumer : BackgroundService
 {
     private readonly RabbitMqConnection _connection;
     private readonly ILogger<RabbitMqBaseConsumer> _logger;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly SemaphoreSlim _concurrencySemaphore = new(MaxConcurrency, MaxConcurrency);
     private IChannel? _channel;
-    
+
+    private const int MaxConcurrency = 10;
+    private const int MaxRetries = 3;
+
     protected abstract string QueueName { get; }
 
-    protected RabbitMqBaseConsumer(RabbitMqConnection connection, ILogger<RabbitMqBaseConsumer> logger)
+    /// <summary>Override and return true to skip AMQP timestamp validation for this queue.</summary>
+    protected virtual bool SkipTimestampValidation => false;
+
+    protected RabbitMqBaseConsumer(
+        RabbitMqConnection connection,
+        ILogger<RabbitMqBaseConsumer> logger,
+        IServiceProvider serviceProvider)
     {
         _connection = connection;
         _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        _logger.LogInformation("Starting {ConsumerName} on queue {QueueName}", GetType().Name, QueueName);
+        _logger.LogInformation("[{Consumer}] Starting on queue '{Queue}'", GetType().Name, QueueName);
 
-        var retryCount = 0;
+        var connectionRetry = 0;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -37,7 +67,6 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
                 var connection = await _connection.GetConnectionAsync(ct);
                 _channel = await connection.CreateChannelAsync(cancellationToken: ct);
 
-                // Declare Main Queue (No DLQ arguments)
                 await _channel.QueueDeclareAsync(
                     queue: QueueName,
                     durable: true,
@@ -54,91 +83,198 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
                     autoAck: false,
                     consumer: consumer,
                     cancellationToken: ct);
-                
-                _logger.LogInformation("{ConsumerName} successfully connected and is consuming from {QueueName}", GetType().Name, QueueName);
-                retryCount = 0; // Reset on success
 
-                // Keep the service alive
+                _logger.LogInformation("[{Consumer}] Consuming from '{Queue}'", GetType().Name, QueueName);
+                connectionRetry = 0;
+
                 while (!ct.IsCancellationRequested && _channel.IsOpen)
-                {
                     await Task.Delay(5000, ct);
-                }
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("{ConsumerName} is stopping", GetType().Name);
+                _logger.LogInformation("[{Consumer}] Stopping.", GetType().Name);
                 break;
             }
             catch (RabbitMQ.Client.Exceptions.OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == 406)
             {
-                _logger.LogWarning("Queue {QueueName} has incompatible arguments (likely old DLQ settings). Cleaning up...", QueueName);
-                
-                try 
-                {
-                    var connection = await _connection.GetConnectionAsync(ct);
-                    using var cleanupChannel = await connection.CreateChannelAsync(cancellationToken: ct);
-                    await cleanupChannel.QueueDeleteAsync(QueueName, cancellationToken: ct);
-                    _logger.LogInformation("Successfully deleted incompatible queue {QueueName}.", QueueName);
-                }
-                catch (Exception deleteEx)
-                {
-                    _logger.LogError(deleteEx, "Failed to delete incompatible queue {QueueName}.", QueueName);
-                }
-
-                await Task.Delay(1000, ct); 
+                _logger.LogWarning("[{Consumer}] Queue '{Queue}' has incompatible args — deleting and retrying.", GetType().Name, QueueName);
+                await TryDeleteQueueAsync(ct);
+                await Task.Delay(1000, ct);
             }
             catch (Exception ex)
             {
-                retryCount++;
-                var delay = Math.Min(30, Math.Pow(2, retryCount)); // Exponential backoff up to 30s
-                _logger.LogWarning(ex, "{ConsumerName} failed to connect to RabbitMQ. Retrying in {Delay}s... (Attempt {Count})", GetType().Name, delay, retryCount);
-                
-                try 
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(delay), ct);
-                }
+                connectionRetry++;
+                var delay = Math.Min(30, Math.Pow(2, connectionRetry));
+                _logger.LogWarning(ex, "[{Consumer}] RabbitMQ connection failed. Retry in {Delay}s (attempt {Count})",
+                    GetType().Name, delay, connectionRetry);
+                try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); }
                 catch (OperationCanceledException) { break; }
             }
         }
     }
 
+    // ── Message Handler ───────────────────────────────────────────────────────
+
     private async Task OnMessageReceivedAsync(object sender, BasicDeliverEventArgs @event)
     {
-        var body = @event.Body.ToArray();
-        var message = Encoding.UTF8.GetString(body);
+        // Timestamp check is fast — keep it synchronous before dispatching
+        if (!SkipTimestampValidation && !IsTimestampValid(@event.BasicProperties.Timestamp))
+        {
+            _logger.LogWarning("[{Consumer}] Discarding stale/missing-timestamp message on '{Queue}'.",
+                GetType().Name, QueueName);
+            await _channel!.BasicNackAsync(@event.DeliveryTag, false, requeue: false);
+            return;
+        }
 
+        // Acquire a concurrency slot (blocks only if all 10 workers are busy)
+        await _concurrencySemaphore.WaitAsync();
+
+        // Capture locals — @event.Body is a ReadOnlyMemory<byte> tied to the delivery,
+        // so copy to array before handing off to the background thread.
+        var body    = @event.Body.ToArray();
+        var message = Encoding.UTF8.GetString(body);
+        var props   = @event.BasicProperties;
+        var tag     = @event.DeliveryTag;
+
+        // Fire-and-forget: OnMessageReceivedAsync returns immediately.
+        // The channel is free to receive the next delivery right away.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await ProcessWithRetryAsync(message, props, tag);
+            }
+            finally
+            {
+                _concurrencySemaphore.Release();
+            }
+        });
+    }
+
+    // ── Retry Loop (non-blocking) ─────────────────────────────────────────────
+
+    private async Task ProcessWithRetryAsync(
+        string message,
+        IReadOnlyBasicProperties props,
+        ulong deliveryTag)
+    {
+        Exception? lastException = null;
+
+        for (var attempt = 0; attempt < MaxRetries; attempt++)
+        {
+            try
+            {
+                if (attempt > 0)
+                    _logger.LogInformation(
+                        "[{Consumer}] Retry attempt {Attempt}/{Max} on '{Queue}'.",
+                        GetType().Name, attempt + 1, MaxRetries, QueueName);
+
+                var success = await ProcessMessageAsync(message, props);
+                if (success)
+                {
+                    await _channel!.BasicAckAsync(deliveryTag, false);
+                    if (attempt > 0)
+                        _logger.LogInformation("[{Consumer}] Message succeeded on attempt {Attempt}.",
+                            GetType().Name, attempt + 1);
+                    return;
+                }
+
+                _logger.LogWarning("[{Consumer}] ProcessMessageAsync returned false on attempt {Attempt}/{Max}.",
+                    GetType().Name, attempt + 1, MaxRetries);
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                _logger.LogWarning(ex, "[{Consumer}] Exception on attempt {Attempt}/{Max} for queue '{Queue}'.",
+                    GetType().Name, attempt + 1, MaxRetries, QueueName);
+            }
+        }
+
+        // ── All retries exhausted → DLQ ──
+        _logger.LogError(lastException,
+            "[{Consumer}] All {Max} attempts failed for message on '{Queue}'. Storing in DeadLetterQueue.",
+            GetType().Name, MaxRetries, QueueName);
+
+        await StoreToDlqAsync(message, lastException?.Message ?? "ProcessMessageAsync returned false after all retries");
+        await _channel!.BasicNackAsync(deliveryTag, false, requeue: false);
+    }
+
+    // ── DLQ Persistence ───────────────────────────────────────────────────────
+
+    private async Task StoreToDlqAsync(string payload, string reason)
+    {
         try
         {
-            _logger.LogInformation("Message received on {QueueName}", QueueName);
-            
-            var success = await ProcessMessageAsync(message, @event.BasicProperties);
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SecureDbContext>();
 
-            if (success)
-            {
-                await _channel!.BasicAckAsync(@event.DeliveryTag, false);
-            }
-            else
-            {
-                // Re-queue = true (Original behavior)
-                _logger.LogWarning("Processing failed for message on {QueueName}. Re-queueing.", QueueName);
-                await _channel!.BasicNackAsync(@event.DeliveryTag, false, true); 
-            }
+            var entry = new FailedMessage(
+                id: Guid.NewGuid(),
+                messageType: GetType().Name.Replace("Consumer", ""),
+                source: QueueName,
+                communicationType: "RabbitMq",
+                payload: payload,
+                failureReason: reason,
+                retryCount: MaxRetries);
+
+            db.FailedMessages.Add(entry);
+            await db.SaveChangesAsync();
+
+            _logger.LogInformation("[{Consumer}] Poison message stored in FailedMessages (Id={Id}).",
+                GetType().Name, entry.Id);
+        }
+        catch (Exception dbEx)
+        {
+            _logger.LogCritical(dbEx,
+                "[{Consumer}] CRITICAL: failed to persist poison message to FailedMessages! Payload={Payload}",
+                GetType().Name, payload);
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private bool IsTimestampValid(AmqpTimestamp? timestamp)
+    {
+        if (timestamp == null || timestamp.Value.UnixTime <= 0)
+        {
+            _logger.LogWarning("[{Consumer}] Missing timestamp on RabbitMQ message.", GetType().Name);
+            return false;
+        }
+        var diff = Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timestamp.Value.UnixTime);
+        if (diff > 5)
+        {
+            _logger.LogWarning("[{Consumer}] Timestamp expired: diff={Diff}s > 5s.", GetType().Name, diff);
+            return false;
+        }
+        return true;
+    }
+
+    private async Task TryDeleteQueueAsync(CancellationToken ct)
+    {
+        try
+        {
+            var conn = await _connection.GetConnectionAsync(ct);
+            using var ch = await conn.CreateChannelAsync(cancellationToken: ct);
+            await ch.QueueDeleteAsync(QueueName, cancellationToken: ct);
+            _logger.LogInformation("[{Consumer}] Deleted incompatible queue '{Queue}'.", GetType().Name, QueueName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing message from {QueueName}. Re-queueing.", QueueName);
-            await _channel!.BasicNackAsync(@event.DeliveryTag, false, true);
+            _logger.LogError(ex, "[{Consumer}] Failed to delete queue '{Queue}'.", GetType().Name, QueueName);
         }
     }
 
     /// <summary>
-    /// Implemented by concrete consumers to process the string message.
+    /// Implemented by concrete consumers to process one message.
+    /// Return true = success (Ack). Return false = failure (triggers retry/DLQ pipeline).
+    /// Throw an exception = failure (triggers retry/DLQ pipeline).
     /// </summary>
     protected abstract Task<bool> ProcessMessageAsync(string message, IReadOnlyBasicProperties properties);
 
     public override void Dispose()
     {
         _channel?.Dispose();
+        _concurrencySemaphore.Dispose();
         base.Dispose();
     }
 }

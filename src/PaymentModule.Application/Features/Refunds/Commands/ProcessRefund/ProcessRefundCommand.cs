@@ -7,9 +7,9 @@ namespace PaymentModule.Application.Features.Refunds.Commands.ProcessRefund;
 /// Command to process a refund request
 /// </summary>
 public record ProcessRefundCommand(
-    string RefundId,
-    string OrderId,
-    string TransactionId,
-    string Reason,
-    string UserId
+    string? RefundId,
+    string? OrderId,
+    string? TransactionId,
+    string? Reason,
+    string? UserId
 ) : IRequest<RefundResultDto>;

@@ -32,7 +32,7 @@ public class HttpProducer : IMessageProducer
         // Let's assume the 'queue' argument in SendAsync contains the Target URL for HTTP strategy.
         // OR we read a default from config. 
         // Let's rely on config for the main notification URL for now.
-        _targetUrl = config["Messaging:Http:NotificationUrl"] ?? "http://localhost:5201/api/v1/notifications/suspicious";
+        _targetUrl = config["PaperMaker:NotificationUrl"] ?? "http://localhost:5201/api/webhooks/notifications/status";
     }
 
     public async Task<ProducerResult> SendAsync(string endpointOrQueue, string payload, CancellationToken ct, string? correlationId = null)

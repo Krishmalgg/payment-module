@@ -58,13 +58,15 @@ public class S2SHeaderGenerator : IS2SHeaderGenerator
 
         _logger.LogInformation("[S2S] Generated Signature: {Sig}", signature);
 
-        return new Dictionary<string, string>
-        {
-            { "x-api-key", apiKey },
-            { "x-timestamp", timestamp },
-            { "x-nonce", nonce },
-            { "x-signature", signature },
-            { "Idempotency-Key", Guid.NewGuid().ToString() }
-        };
+       // (inside GenerateHeaders, after computing `signature` and `pathAndQuery`)
+return new Dictionary<string, string>
+{
+    { "x-api-key", apiKey },
+    { "x-timestamp", timestamp },
+    { "x-nonce", nonce },
+    { "x-signature", signature },
+    { "x-signed-path", pathAndQuery },      // <-- new header with path+query used for signing
+    { "Idempotency-Key", Guid.NewGuid().ToString() }
+};
     }
 }

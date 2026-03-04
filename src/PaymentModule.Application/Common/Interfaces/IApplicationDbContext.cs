@@ -9,6 +9,6 @@ public interface IApplicationDbContext
     DbSet<StoredCard> StoredCards { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Refund> Refunds { get; }
-    DbSet<DeadLetterQueue> DeadLetterQueues { get; }
+    DbSet<FailedMessage> FailedMessages { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

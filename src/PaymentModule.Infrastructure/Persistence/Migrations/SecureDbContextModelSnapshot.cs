@@ -22,52 +22,62 @@ namespace PaymentModule.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("PaymentModule.Domain.Entities.DeadLetterQueue", b =>
+            modelBuilder.Entity("PaymentModule.Domain.Entities.FailedMessage", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
+                    b.Property<string>("CommunicationType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FailureReason")
                         .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("failure_reason");
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
-                    b.Property<DateTime>("LastAttemptAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_attempt_at");
+                    b.Property<DateTimeOffset>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("payload");
-
-                    b.Property<Guid>("RefundId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("refund_id");
+                        .HasColumnType("jsonb");
 
                     b.Property<bool>("Resolved")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("resolved");
+                        .HasDefaultValue(false);
 
                     b.Property<int>("RetryCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("retry_count");
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RefundId")
-                        .HasDatabaseName("idx_dlq_refund_id");
+                    b.HasIndex("CommunicationType")
+                        .HasDatabaseName("idx_failedmsg_comm_type");
 
-                    b.ToTable("dead_letter_queue", (string)null);
+                    b.HasIndex("MessageType")
+                        .HasDatabaseName("idx_failedmsg_message_type");
+
+                    b.HasIndex("Resolved")
+                        .HasDatabaseName("idx_failedmsg_resolved");
+
+                    b.ToTable("FailedMessages", (string)null);
                 });
 
             modelBuilder.Entity("PaymentModule.Domain.Entities.IdempotencyRecord", b =>
@@ -104,6 +114,9 @@ namespace PaymentModule.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -114,6 +127,15 @@ namespace PaymentModule.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ProcessedBy")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -121,7 +143,14 @@ namespace PaymentModule.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedAt", "OccurredAt");
+                    b.HasIndex("ProcessedAt", "OccurredAt")
+                        .HasDatabaseName("IX_OutboxMessages_Unprocessed");
+
+                    b.HasIndex("ProcessedAt", "RetryCount")
+                        .HasDatabaseName("IX_OutboxMessages_Retries");
+
+                    b.HasIndex("ProcessedAt", "ProcessedBy", "LockedUntil")
+                        .HasDatabaseName("IX_OutboxMessages_Locked");
 
                     b.ToTable("OutboxMessages", (string)null);
                 });

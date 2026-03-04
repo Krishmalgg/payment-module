@@ -26,6 +26,10 @@ public class PayHereAdapter : IPaymentGateway
     private readonly ILogger<PayHereAdapter> _logger;
     private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
 
+    // Static so all instances share the same lock — guards against cache stampede
+    // when multiple concurrent requests all see a token cache miss simultaneously.
+    private static readonly SemaphoreSlim _tokenLock = new(1, 1);
+
     public PayHereAdapter(
         IOptions<PayHereOptions> options, 
         ResiliencePipelineProvider<string> pipelineProvider,
@@ -206,7 +210,7 @@ public class PayHereAdapter : IPaymentGateway
                 custom_2 = metadata?.GetValueOrDefault("email")
             };
 
-            var requestUri = "https://sandbox.payhere.lk/merchant/v1/payment/charge";
+            var requestUri = _options.ChargeUrl;
 
             var response = await _pipeline.ExecuteAsync(async token => 
             {
@@ -249,51 +253,68 @@ public class PayHereAdapter : IPaymentGateway
 
     private async Task<string> GetAccessTokenAsync(CancellationToken ct)
     {
-         const string cacheKey = "PayHere_AccessToken";
-         
-         if (_cache.TryGetValue(cacheKey, out string? cachedToken))
-         {
-             _logger.LogInformation("Using cached PayHere access token.");
-             return cachedToken!;
-         }
+        const string cacheKey = "PayHere_AccessToken";
 
-         _logger.LogInformation("Fetching new PayHere access token...");
-         var authToken = System.Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{_options.AppId}:{_options.AppSecret}"));
-         var requestUri = "https://sandbox.payhere.lk/merchant/v1/oauth/token";
+        // Fast path — no lock needed (vast majority of calls hit this)
+        if (_cache.TryGetValue(cacheKey, out string? cachedToken))
+        {
+            _logger.LogInformation("Using cached PayHere access token.");
+            return cachedToken!;
+        }
 
-         var response = await _pipeline.ExecuteAsync(async token => 
-         {
-             var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
-             {
-                 Content = new FormUrlEncodedContent(new[]
-                 {
-                     new KeyValuePair<string, string>("grant_type", "client_credentials")
-                 }),
-                 Headers = { { "Authorization", $"Basic {authToken}" } }
-             };
+        // Slow path — serialize concurrent fetches so only one thread calls PayHere OAuth
+        await _tokenLock.WaitAsync(ct);
+        try
+        {
+            // Double-check: another thread may have fetched while we waited for the lock
+            if (_cache.TryGetValue(cacheKey, out cachedToken))
+            {
+                _logger.LogInformation("Using cached PayHere access token (after lock).");
+                return cachedToken!;
+            }
 
-             var res = await _httpClient.SendAsync(request, token);
-             
-             if ((int)res.StatusCode >= 500 || res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-             {
-                 res.EnsureSuccessStatusCode();
-             }
-             
-             return res;
-         }, ct);
+            _logger.LogInformation("Fetching new PayHere access token...");
+            var authToken = System.Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{_options.AppId}:{_options.AppSecret}"));
+            var requestUri = _options.OAuthTokenUrl;
 
-         response.EnsureSuccessStatusCode();
-         
-         var content = await response.Content.ReadAsStringAsync(ct);
-         using var doc = JsonDocument.Parse(content);
-         var newToken = doc.RootElement.GetProperty("access_token").GetString()!;
+            var response = await _pipeline.ExecuteAsync(async token =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+                {
+                    Content = new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("grant_type", "client_credentials")
+                    }),
+                    Headers = { { "Authorization", $"Basic {authToken}" } }
+                };
 
-         var cacheOptions = new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions()
-            .SetAbsoluteExpiration(TimeSpan.FromMinutes(50));
-         
-         _cache.Set(cacheKey, newToken, cacheOptions);
-         
-         return newToken;
+                var res = await _httpClient.SendAsync(request, token);
+
+                if ((int)res.StatusCode >= 500 || res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    res.EnsureSuccessStatusCode();
+                }
+
+                return res;
+            }, ct);
+
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(content);
+            var newToken = doc.RootElement.GetProperty("access_token").GetString()!;
+
+            var cacheOptions = new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(50));
+
+            _cache.Set(cacheKey, newToken, cacheOptions);
+
+            return newToken;
+        }
+        finally
+        {
+            _tokenLock.Release();
+        }
     }
 
     public async Task<PaymentModule.Domain.ValueObjects.RefundResult> RefundAsync(
@@ -306,7 +327,7 @@ public class PayHereAdapter : IPaymentGateway
         try
         {
             var accessToken = await GetAccessTokenAsync(ct);
-            var requestUri = "https://sandbox.payhere.lk/merchant/v1/payment/refund";
+            var requestUri = _options.RefundUrl;
 
             _logger.LogInformation("Initiating refund for Payment ID: {PaymentId}, Amount: {Amount}", 
                 providerRefId, amount);

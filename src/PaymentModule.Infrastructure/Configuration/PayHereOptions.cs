@@ -15,6 +15,9 @@ public class PayHereOptions
     public string CancelUrl { get; set; } = string.Empty;
     public string CheckoutNotifyUrl { get; set; } = string.Empty;
     public string InstantPayNotifyUrl { get; set; } = string.Empty;
+    public string ChargeUrl { get; set; } = string.Empty;
+    public string OAuthTokenUrl { get; set; } = string.Empty;
+    public string RefundUrl { get; set; } = string.Empty;
 }
 
 

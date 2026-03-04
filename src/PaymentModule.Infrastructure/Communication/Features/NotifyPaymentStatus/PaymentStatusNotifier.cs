@@ -77,9 +77,28 @@ public class PaymentStatusNotifier : IPaymentStatusNotifier, IOutboxMessageHandl
     public async Task<ProducerResult> HandleAsync(string payload, CancellationToken cancellationToken)
     {
         var producer = _producerFactory.GetProducer();
-        var destination = _configuration["Messaging:Http:NotificationUrl"] ?? 
-                         _configuration["Messaging:Parameters:QueueName"] ?? 
-                         "payment.notifications";
+        
+        // Default to Status Notification URL
+        string destination = _configuration["PaperMaker:NotificationUrl"] 
+                             ?? "http://localhost:5201/api/webhooks/notifications/status";
+
+        try 
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var message = JsonSerializer.Deserialize<PaymentStatusPayload>(payload, options);
+            
+            // Check if status is SUSPICIOUS and route accordingly
+            if (message?.Status != null && message.Status.Equals("SUSPICIOUS", StringComparison.OrdinalIgnoreCase))
+            {
+                destination = _configuration["PaperMaker:SuspiciousActivityUrl"] 
+                              ?? "http://localhost:5201/api/v1/notifications/suspicious";
+                _logger.LogWarning("⚠️ Routing PaymentStatus to SuspiciousActivityUrl for Transaction {TransactionId}", message.TransactionId);
+            }
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Failed to parse payload for routing logic. Using default destination.");
+        }
 
         _logger.LogInformation("Handling Outbox Message: {Type} sending to {Destination}", MessageType, destination);
         

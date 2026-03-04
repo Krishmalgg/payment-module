@@ -31,6 +31,40 @@ public class ProcessRefundCommandHandler : IRequestHandler<ProcessRefundCommand,
         _logger.LogInformation("Processing refund for TransactionId: {TransactionId}, RefundId: {RefundId}",
             request.TransactionId, request.RefundId);
 
+        // Validate required fields
+        if (string.IsNullOrEmpty(request.RefundId))
+        {
+            _logger.LogWarning("RefundId is required but was null or empty");
+            return new RefundResultDto(
+                IsSuccess: false,
+                RefundId: string.Empty,
+                Status: RefundStatus.Failed,
+                ErrorMessage: "refund_id is required"
+            );
+        }
+
+        if (string.IsNullOrEmpty(request.TransactionId))
+        {
+            _logger.LogWarning("TransactionId is required but was null or empty");
+            return new RefundResultDto(
+                IsSuccess: false,
+                RefundId: request.RefundId,
+                Status: RefundStatus.Failed,
+                ErrorMessage: "transaction_id is required"
+            );
+        }
+
+        if (string.IsNullOrEmpty(request.UserId))
+        {
+            _logger.LogWarning("UserId is required but was null or empty");
+            return new RefundResultDto(
+                IsSuccess: false,
+                RefundId: request.RefundId,
+                Status: RefundStatus.Failed,
+                ErrorMessage: "user_id is required"
+            );
+        }
+
         // 1. Idempotency Check - check if refund already exists
         var refundGuidParsed = Guid.TryParse(request.RefundId, out var refundGuid);
         var existingRefund = await _context.Refunds
@@ -234,18 +268,20 @@ public class ProcessRefundCommandHandler : IRequestHandler<ProcessRefundCommand,
             var failureReason = lastException?.Message ?? payHereResponse?.ErrorMessage ?? "Unknown error";
             refund.MarkAsFailed(failureReason);
 
-            var dlqEntry = new DeadLetterQueue(
-                Guid.NewGuid(),
-                refund.RefundId,
-                JsonSerializer.Serialize(request),
-                failureReason,
-                refund.RetryCount
+            var failedEntry = new FailedMessage(
+                id: Guid.NewGuid(),
+                messageType: "Refund",
+                source: "payment.refund.requests",
+                communicationType: "RabbitMq",
+                payload: JsonSerializer.Serialize(request),
+                failureReason: failureReason,
+                retryCount: refund.RetryCount
             );
 
-            _context.DeadLetterQueues.Add(dlqEntry);
+            _context.FailedMessages.Add(failedEntry);
             await _context.SaveChangesAsync(cancellationToken);
 
-            _logger.LogError("Refund failed and moved to DLQ. RefundId: {RefundId}, Reason: {Reason}",
+            _logger.LogError("Refund failed and moved to FailedMessages. RefundId: {RefundId}, Reason: {Reason}",
                 request.RefundId, failureReason);
 
             return new RefundResultDto(

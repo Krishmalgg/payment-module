@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using PaymentModule.Api.HealthChecks;
 using PaymentModule.Api.Middleware;
+using PaymentModule.Api.Security;
+using Papermaker.PaymentSDKNEW.Core.Messaging;
 using PaymentModule.Application.Common.Behaviors;
 using PaymentModule.Application.Common.Interfaces;
 using PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent;
@@ -18,6 +20,10 @@ using Serilog;
 using Polly;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Feature flag — read early so it can drive both service registration and middleware pipeline
+var isNewS2s = builder.Configuration.GetValue<bool>("Security:IsNewS2sValidation");
+Console.WriteLine($"[Config] IsNewS2sValidation = {isNewS2s}");
 
 // Serilog Configuration
 builder.Host.UseSerilog((context, config) =>
@@ -55,28 +61,15 @@ DotNetEnv.Env.Load();
 // Bind S2S Options
 builder.Services.Configure<S2SSecurityOptions>(options =>
 {
-    // 1. Load from appsettings/config first
+    // Load from appsettings/config first
     var section = builder.Configuration.GetSection("Security");
     options.ApiKeys = section.GetSection("ApiKeys").Get<string[]>() ?? [];
     options.HmacSecrets = section.GetSection("HmacSecrets").Get<string[]>() ?? [];
 
-    // 2. Override with .env if keys exist
-    var newKey = DotNetEnv.Env.GetString("NEW_S2S_API_KEY");
-    var oldKey = DotNetEnv.Env.GetString("OLD_S2S_API_KEY");
-    var newSecret = DotNetEnv.Env.GetString("NEW_S2S_HMAC_SECRET");
-    var oldSecret = DotNetEnv.Env.GetString("OLD_S2S_HMAC_SECRET");
-
-    var envApiKeys = new List<string>();
-    var envSecrets = new List<string>();
-
-    if (!string.IsNullOrWhiteSpace(newKey)) envApiKeys.Add(newKey);
-    if (!string.IsNullOrWhiteSpace(oldKey)) envApiKeys.Add(oldKey);
-
-    if (!string.IsNullOrWhiteSpace(newSecret)) envSecrets.Add(newSecret);
-    if (!string.IsNullOrWhiteSpace(oldSecret)) envSecrets.Add(oldSecret);
-    
-    if (envApiKeys.Count > 0) options.ApiKeys = envApiKeys.ToArray();
-    if (envSecrets.Count > 0) options.HmacSecrets = envSecrets.ToArray();
+    // Override with .env if keys exist (supports NEW + OLD key rotation)
+    var (envKeys, envSecrets) = LoadS2SKeysFromEnv();
+    if (envKeys.Length > 0) options.ApiKeys = envKeys;
+    if (envSecrets.Length > 0) options.HmacSecrets = envSecrets;
 });
 
 builder.Services.AddInMemoryRateLimiting();
@@ -107,23 +100,17 @@ builder.Services.AddResiliencePipeline("payment-gateway", builder =>
 builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PaperMakerOptions>(options =>
 {
     builder.Configuration.GetSection("PaperMaker").Bind(options);
-    
-    var newKey = DotNetEnv.Env.GetString("NEW_S2S_API_KEY");
-    var oldKey = DotNetEnv.Env.GetString("OLD_S2S_API_KEY");
-    var newSecret = DotNetEnv.Env.GetString("NEW_S2S_HMAC_SECRET");
-    var oldSecret = DotNetEnv.Env.GetString("OLD_S2S_HMAC_SECRET");
 
-    options.ApiKeys = new List<string>();
-    options.HmacSecrets = new List<string>();
-
-    if (!string.IsNullOrWhiteSpace(newKey)) options.ApiKeys.Add(newKey);
-    if (!string.IsNullOrWhiteSpace(oldKey)) options.ApiKeys.Add(oldKey);
-
-    if (!string.IsNullOrWhiteSpace(newSecret)) options.HmacSecrets.Add(newSecret);
-    if (!string.IsNullOrWhiteSpace(oldSecret)) options.HmacSecrets.Add(oldSecret);
-    if (!string.IsNullOrWhiteSpace(oldSecret)) options.HmacSecrets.Add(oldSecret);
+    // Override with .env if keys exist (supports NEW + OLD key rotation)
+    var (envKeys, envSecrets) = LoadS2SKeysFromEnv();
+    if (envKeys.Length > 0) options.ApiKeys = envKeys.ToList();
+    if (envSecrets.Length > 0) options.HmacSecrets = envSecrets.ToList();
 });
 builder.Services.AddHttpClient(); // Required for PayHereAdapter
+
+// Outbox Processing Configuration
+builder.Services.Configure<PaymentModule.Infrastructure.Configuration.OutboxProcessingOptions>(
+    builder.Configuration.GetSection("OutboxProcessing"));
 
 var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
 if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
@@ -143,7 +130,22 @@ builder.Services.AddScoped<ICurrentUserService, PaymentModule.Api.Services.Curre
 builder.Services.AddScoped<IOutboxService, OutboxService>();
 builder.Services.AddSingleton<IOutboxTrigger, OutboxTrigger>();
 builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqConnection>();
+builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqChannelPool>();
 builder.Services.AddTransient<IS2SHeaderGenerator, S2SHeaderGenerator>();
+// New S2S helpers — HmacSigner is stateless so singleton is fine;
+// S2SResponseSigningFilter is scoped so it can receive scoped dependencies if needed.
+builder.Services.AddSingleton<HmacSigner>();
+builder.Services.AddSingleton<EnvelopeFactory>();
+builder.Services.AddSingleton<SecurityHeadersHandler>();  // signs payloads + adds HTTP headers
+builder.Services.AddSingleton<SecurityHeaderValidator>(); // validates incoming headers (replay, timestamp, HMAC)
+builder.Services.AddScoped<S2SResponseSigningFilter>();
+
+// Outbox Processing Strategies
+builder.Services.AddScoped<PaymentModule.Application.Common.Interfaces.IOutboxRetryPolicy,
+    PaymentModule.Infrastructure.Communication.Core.Outbox.OutboxRetryPolicy>();
+builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.SequentialOutboxProcessingStrategy>();
+builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.ParallelOutboxProcessingStrategy>();
+builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.DistributedMultithreadedOutboxProcessingStrategy>();
 
 // Feature-Specific Notifiers
 builder.Services.AddScoped<PaymentModule.Application.Features.Payments.Interfaces.IPaymentStatusNotifier, 
@@ -154,7 +156,7 @@ builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbo
     PaymentModule.Infrastructure.Communication.Core.Outbox.OutboxDispatcher>();
 
 // Producers (Registered as concrete types or via Factory later)
-builder.Services.AddTransient<PaymentModule.Infrastructure.Communication.Core.Producers.RabbitMqProducer>();
+builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Producers.RabbitMqProducer>();
 builder.Services.AddTransient<PaymentModule.Infrastructure.Communication.Core.Producers.HttpProducer>();
 builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Factory.ProducerFactory>();
 
@@ -199,7 +201,13 @@ builder.Services.AddApiVersioning(options =>
 });
 
 // Controllers and OpenAPI
-builder.Services.AddControllers();
+// When IsNewS2sValidation = true the global filter signs every action response automatically;
+// no changes to individual controllers are required.
+builder.Services.AddControllers(options =>
+{
+    if (isNewS2s)
+        options.Filters.AddService<S2SResponseSigningFilter>();
+});
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -226,7 +234,13 @@ app.UseCors("AllowedOrigins");
 app.UseIpRateLimiting();
 
 // Custom Middleware
-app.UseMiddleware<S2SSecurityMiddleware>(); // Added S2S Security
+// Log headers early for debugging and visibility
+app.UseMiddleware<RequestHeaderLoggingMiddleware>();
+
+// Log request body safely (redacts common sensitive fields)
+app.UseMiddleware<RequestBodyLoggingMiddleware>();
+
+app.UseMiddleware<NewS2SSecurityMiddleware>();
 app.UseMiddleware<IdempotencyMiddleware>();
 
 // Routing
@@ -239,3 +253,23 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 });
 
 app.Run();
+
+// Loads NEW + OLD S2S keys/secrets from .env for API key rotation.
+// Order matters: NEW first so validators prefer it; OLD accepted as fallback.
+static (string[] ApiKeys, string[] HmacSecrets) LoadS2SKeysFromEnv()
+{
+    var keys    = new List<string>();
+    var secrets = new List<string>();
+
+    var newKey    = DotNetEnv.Env.GetString("NEW_S2S_API_KEY");
+    var oldKey    = DotNetEnv.Env.GetString("OLD_S2S_API_KEY");
+    var newSecret = DotNetEnv.Env.GetString("NEW_S2S_HMAC_SECRET");
+    var oldSecret = DotNetEnv.Env.GetString("OLD_S2S_HMAC_SECRET");
+
+    if (!string.IsNullOrWhiteSpace(newKey))    keys.Add(newKey);
+    if (!string.IsNullOrWhiteSpace(oldKey))    keys.Add(oldKey);
+    if (!string.IsNullOrWhiteSpace(newSecret)) secrets.Add(newSecret);
+    if (!string.IsNullOrWhiteSpace(oldSecret)) secrets.Add(oldSecret);
+
+    return (keys.ToArray(), secrets.ToArray());
+}

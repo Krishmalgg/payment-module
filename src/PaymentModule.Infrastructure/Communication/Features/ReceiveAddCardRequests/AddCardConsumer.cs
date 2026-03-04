@@ -25,7 +25,7 @@ public class AddCardConsumer : RabbitMqBaseConsumer
         RabbitMqConnection connection,
         ILogger<AddCardConsumer> logger,
         IServiceProvider serviceProvider,
-        IConfiguration configuration) : base(connection, logger)
+        IConfiguration configuration) : base(connection, logger, serviceProvider)
     {
         _serviceProvider = serviceProvider;
         _configuration = configuration;

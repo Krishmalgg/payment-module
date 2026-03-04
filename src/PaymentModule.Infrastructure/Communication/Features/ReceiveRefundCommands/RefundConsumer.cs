@@ -27,7 +27,7 @@ public class RefundConsumer : RabbitMqBaseConsumer
         RabbitMqConnection connection,
         ILogger<RefundConsumer> logger,
         IServiceProvider serviceProvider,
-        IConfiguration configuration) : base(connection, logger)
+        IConfiguration configuration) : base(connection, logger, serviceProvider)
     {
         _serviceProvider = serviceProvider;
         _configuration = configuration;

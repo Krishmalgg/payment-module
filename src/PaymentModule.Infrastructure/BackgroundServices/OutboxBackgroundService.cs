@@ -1,9 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using PaymentModule.Application.Common.Interfaces;
 using PaymentModule.Infrastructure.Communication.Core.Outbox;
+using PaymentModule.Infrastructure.Configuration;
 
 namespace PaymentModule.Infrastructure.BackgroundServices;
 
@@ -11,25 +12,33 @@ public class OutboxBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxBackgroundService> _logger;
-    private readonly IConfiguration _configuration;
     private readonly IOutboxTrigger _trigger;
-    private readonly TimeSpan _defaultInterval = TimeSpan.FromSeconds(30);
+    private readonly OutboxProcessingOptions _options;
+    private readonly TimeSpan _defaultInterval;
 
     public OutboxBackgroundService(
         IServiceProvider serviceProvider,
         ILogger<OutboxBackgroundService> logger,
-        IConfiguration configuration,
+        IOptions<OutboxProcessingOptions> optionsAccessor,
         IOutboxTrigger trigger)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
-        _configuration = configuration;
         _trigger = trigger;
+        _options = optionsAccessor.Value;
+        _defaultInterval = TimeSpan.FromSeconds(_options.ProcessingIntervalSeconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Outbox Background Service started (Dispatcher mode)");
+        if (!_options.Enabled)
+        {
+            _logger.LogInformation("Outbox Background Service is disabled");
+            return;
+        }
+
+        var scaleLevel = DetermineScaleLevel();
+        _logger.LogInformation("Outbox Background Service started (Scale Level: {ScaleLevel})", scaleLevel);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -38,7 +47,7 @@ public class OutboxBackgroundService : BackgroundService
                 bool messagesProcessed;
                 do
                 {
-                    messagesProcessed = await ProcessOutboxMessagesAsync(stoppingToken);
+                    messagesProcessed = await ProcessOutboxMessagesAsync(scaleLevel, stoppingToken);
                 } while (messagesProcessed && !stoppingToken.IsCancellationRequested);
             }
             catch (Exception ex)
@@ -49,7 +58,7 @@ public class OutboxBackgroundService : BackgroundService
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
             cts.CancelAfter(_defaultInterval);
 
-            try 
+            try
             {
                 await _trigger.WaitForTriggerAsync(cts.Token);
             }
@@ -59,46 +68,56 @@ public class OutboxBackgroundService : BackgroundService
         _logger.LogInformation("Outbox Background Service stopped");
     }
 
-    private async Task<bool> ProcessOutboxMessagesAsync(CancellationToken cancellationToken)
+    private int DetermineScaleLevel()
+    {
+        if (_options.AutoScale)
+        {
+            // Auto-scaling logic based on message volume
+            // This is a placeholder - implement based on your requirements
+            // For example: check outbox message count and scale accordingly
+            return 2;  // Default to Level 2 for now
+        }
+
+        return _options.ScaleLevel;
+    }
+
+    private async Task<bool> ProcessOutboxMessagesAsync(int scaleLevel, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var outboxService = scope.ServiceProvider.GetRequiredService<IOutboxService>();
         var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxDispatcher>();
 
-        var messageIds = await outboxService.GetUnprocessedMessageIdsAsync(10, cancellationToken);
+        // Get unprocessed message IDs — excludes messages that exceeded max retry attempts
+        var messageIds = await outboxService.GetUnprocessedMessageIdsAsync(_options.BatchSize, _options.MaxRetryAttempts, cancellationToken);
 
         if (!messageIds.Any()) return false;
 
-        foreach (var messageId in messageIds)
+        // Select strategy based on scale level
+        var strategy = GetStrategy(scaleLevel, scope);
+
+        _logger.LogDebug("Processing {Count} messages with strategy Level {ScaleLevel}", messageIds.Count(), scaleLevel);
+
+        try
         {
-            try
-            {
-                var message = await outboxService.GetMessageAsync(messageId, cancellationToken);
-                if (message == null) continue;
-
-                _logger.LogInformation("Processing Outbox Message: {Id} Type: {Type}", messageId, message.Type);
-
-                // Dispatch via feature-specific handler
-                var result = await dispatcher.DispatchAsync(message, cancellationToken);
-
-                if (result.Success)
-                {
-                    await outboxService.ProcessMessageAsync(messageId, cancellationToken);
-                    _logger.LogInformation("Successfully processed outbox message {MessageId}", messageId);
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to process message {MessageId}. Error: {Error}. Retrying in 10s...", messageId, result.ErrorMessage);
-                    await Task.Delay(10000, cancellationToken);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Exception while processing outbox message {MessageId}. Retrying in 10s...", messageId);
-                await Task.Delay(10000, cancellationToken);
-            }
+            var processedCount = await strategy.ProcessMessagesAsync(messageIds, outboxService, dispatcher, cancellationToken);
+            _logger.LogInformation("Processed {ProcessedCount} of {TotalCount} outbox messages", processedCount, messageIds.Count());
+            return processedCount > 0;
         }
-        
-        return true;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during outbox message processing");
+            return false;
+        }
+    }
+
+    private IOutboxProcessingStrategy GetStrategy(int scaleLevel, IServiceScope scope)
+    {
+        return scaleLevel switch
+        {
+            1 => scope.ServiceProvider.GetRequiredService<SequentialOutboxProcessingStrategy>(),
+            2 => scope.ServiceProvider.GetRequiredService<ParallelOutboxProcessingStrategy>(),
+            3 => scope.ServiceProvider.GetRequiredService<DistributedMultithreadedOutboxProcessingStrategy>(),
+            _ => scope.ServiceProvider.GetRequiredService<SequentialOutboxProcessingStrategy>()
+        };
     }
 }

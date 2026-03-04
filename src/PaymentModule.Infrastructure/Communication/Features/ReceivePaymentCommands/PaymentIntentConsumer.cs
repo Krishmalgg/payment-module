@@ -26,7 +26,7 @@ public class PaymentIntentConsumer : RabbitMqBaseConsumer
         RabbitMqConnection connection,
         ILogger<PaymentIntentConsumer> logger,
         IServiceProvider serviceProvider,
-        IConfiguration configuration) : base(connection, logger)
+        IConfiguration configuration) : base(connection, logger, serviceProvider)
     {
         _serviceProvider = serviceProvider;
         _configuration = configuration;
@@ -59,22 +59,37 @@ public class PaymentIntentConsumer : RabbitMqBaseConsumer
             // Trigger the application logic
             var result = await mediator.Send(command);
 
-            // 3. Determine where to send the response (Standard Reply-To Header)
-            var finalResponseQueue = properties.ReplyTo 
-                ?? _configuration["Messaging:RabbitMq:Queues:GetStoredCardsResponse"];
+            // Determine where to send the response (dedicated response queue only)
+            var finalResponseQueue = _configuration["Messaging:RabbitMq:Queues:PaymentIntentResponse"]
+                ?? "payment.initiate.responses";
 
             if (!string.IsNullOrEmpty(finalResponseQueue))
             {
                 var producer = scope.ServiceProvider.GetRequiredService<RabbitMqProducer>();
                 
-                // Flatten the response as requested
-                var responsePayload = JsonSerializer.Serialize(new { 
-                    OrderId = command.OrderId, 
-                    Gateway = result.Gateway,
-                    Action = result.Action,
-                    Url = result.Url,
-                    Fields = result.Fields
+                // Wrap response with isSuccess envelope — matches HTTP response format
+                var envelope = new { 
+                    isSuccess = true,
+                    payload = new {
+                        OrderId = command.OrderId, 
+                        Gateway = result.Gateway,
+                        Action = result.Action,
+                        Url = result.Url,
+                        Fields = result.Fields
+                    }
+                };
+                var responsePayload = JsonSerializer.Serialize(envelope, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 });
+                
+                // Log response for visibility
+                Console.WriteLine($"\n[PaymentIntentConsumer] === RESPONSE MESSAGE ===");
+                Console.WriteLine($"Queue: {finalResponseQueue}");
+                Console.WriteLine($"CorrelationId: {properties.CorrelationId}");
+                Console.WriteLine($"IsSuccess: true");
+                Console.WriteLine($"Payload:\n{responsePayload}");
+                Console.WriteLine($"=========================\n");
                 
                 // CRITICAL: Send back the CorrelationId so the Main Server can "link" this response to its request
                 await producer.SendAsync(finalResponseQueue, responsePayload, CancellationToken.None, properties.CorrelationId);
@@ -91,6 +106,39 @@ public class PaymentIntentConsumer : RabbitMqBaseConsumer
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process PaymentIntent request from RabbitMQ");
+
+            // Send error response with isSuccess: false so Main Server knows it failed
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var producer = scope.ServiceProvider.GetRequiredService<RabbitMqProducer>();
+                var finalResponseQueue = _configuration["Messaging:RabbitMq:Queues:PaymentIntentResponse"]
+                    ?? "payment.initiate.responses";
+
+                var errorEnvelope = new
+                {
+                    isSuccess = false,
+                    error = ex.Message
+                };
+                var errorPayload = JsonSerializer.Serialize(errorEnvelope, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                Console.WriteLine($"\n[PaymentIntentConsumer] === ERROR RESPONSE ===");
+                Console.WriteLine($"Queue: {finalResponseQueue}");
+                Console.WriteLine($"CorrelationId: {properties.CorrelationId}");
+                Console.WriteLine($"IsSuccess: false");
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"=========================\n");
+
+                await producer.SendAsync(finalResponseQueue, errorPayload, CancellationToken.None, properties.CorrelationId);
+            }
+            catch (Exception sendEx)
+            {
+                _logger.LogError(sendEx, "Failed to send error response to queue");
+            }
+
             return false; // Retry
         }
     }

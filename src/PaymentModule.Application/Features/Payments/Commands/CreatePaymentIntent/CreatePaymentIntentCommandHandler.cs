@@ -32,15 +32,15 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
             : new Dictionary<string, string>();
 
         // Add standard fields for Gateway
-        if (!string.IsNullOrEmpty(request.Email)) metadata["email"] = request.Email;
+        if (!string.IsNullOrEmpty(request.UserData?.Email)) metadata["email"] = request.UserData.Email;
         if (!string.IsNullOrEmpty(request.OrderId)) metadata["order_id"] = request.OrderId;
-        if (!string.IsNullOrEmpty(request.UserId)) metadata["user_id"] = request.UserId;
-        if (!string.IsNullOrEmpty(request.Address)) metadata["address"] = request.Address;
-        if (!string.IsNullOrEmpty(request.City)) metadata["city"] = request.City;
-        if (!string.IsNullOrEmpty(request.Country)) metadata["country"] = request.Country;
-        if (!string.IsNullOrEmpty(request.UserName)) 
+        if (!string.IsNullOrEmpty(request.UserData?.UserId)) metadata["user_id"] = request.UserData.UserId;
+        if (!string.IsNullOrEmpty(request.UserData?.Address)) metadata["address"] = request.UserData.Address;
+        if (!string.IsNullOrEmpty(request.UserData?.City)) metadata["city"] = request.UserData.City;
+        if (!string.IsNullOrEmpty(request.UserData?.Country)) metadata["country"] = request.UserData.Country;
+        if (!string.IsNullOrEmpty(request.UserData?.FullName)) 
         {
-            var names = request.UserName.Split(' ', 2);
+            var names = request.UserData.FullName.Split(' ', 2);
             metadata["first_name"] = names[0];
             if (names.Length > 1) metadata["last_name"] = names[1];
         }
@@ -56,9 +56,8 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
         {
             throw new ArgumentException("OrderId is required");
         }
-
         // Parse UserId as Guid
-        if (!Guid.TryParse(request.UserId, out var userIdGuid))
+        if (!Guid.TryParse(request.UserData?.UserId, out var userIdGuid))
         {
             throw new ArgumentException("UserId must be a valid GUID");
         }
@@ -80,8 +79,8 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
             request.Amount,
             request.Currency,
             "PAYHERE", // We know we are using PayHere in this slice
-            request.UserName ?? throw new ArgumentException("UserName is required"),
-            request.Email
+            request.UserData?.FullName ?? throw new ArgumentException("FullName is required"),
+            request.UserData?.Email
         );
 
         // --- PRE-PERSISTENCE (Avoid Race Condition) ---
@@ -103,7 +102,7 @@ public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIn
             money,
             metadata,
             cancellationToken,
-            request.CustomerToken
+            request.UserData?.CustomerToken
         );
 
         Console.WriteLine("[CommandHandler] Gateway Response Action: " + result.Action);

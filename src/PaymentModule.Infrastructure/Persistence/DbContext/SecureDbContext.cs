@@ -33,7 +33,7 @@ public class SecureDbContext : Microsoft.EntityFrameworkCore.DbContext, IApplica
     public Microsoft.EntityFrameworkCore.DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public Microsoft.EntityFrameworkCore.DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public Microsoft.EntityFrameworkCore.DbSet<Refund> Refunds => Set<Refund>();
-    public Microsoft.EntityFrameworkCore.DbSet<DeadLetterQueue> DeadLetterQueues => Set<DeadLetterQueue>();
+    public Microsoft.EntityFrameworkCore.DbSet<FailedMessage> FailedMessages => Set<FailedMessage>();
 
     protected override void OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
     {

@@ -46,12 +46,31 @@ public class ProcessPayHereWebhookCommandHandler : IRequestHandler<ProcessPayHer
         var transaction = await _dbContext.Transactions
             .FirstOrDefaultAsync(t => t.OrderId == result.OrderId, ct);
         _logger.LogInformation("Transaction lookup result for {OrderId}: {Status}", result.OrderId, transaction == null ? "NULL" : "FOUND");
+        
         // --- IDEMPOTENCY / RACE CONDITION HANDLING ---
-        // Step 3: If YES, and already processed, Stop.
-        if (transaction != null && (transaction.Status == "COMPLETED" || transaction.Status == "FAILED" || transaction.Status == "SUSPICIOUS"))
+        // Step 3: Check if update is needed
+        if (transaction != null)
         {
-            _logger.LogInformation("⏭️ Transaction {OrderId} already has status {Status}. Stopping.", result.OrderId, transaction.Status);
-            return new { status = "success", message = "Already processed" };
+            // Case 1: Already COMPLETED - Do not update, but log (and potentially notify)
+            if (transaction.Status == "COMPLETED")
+            {
+                _logger.LogWarning("⚠️ Duplicate Webhook: Transaction {OrderId} is already COMPLETED. New status attempt: {NewStatus}", result.OrderId, result.StatusCode);
+                // We return 'success' to PayHere so they stop retrying, but we don't change our DB
+                return new { status = "success", message = "Payment Already Completed" };
+            }
+
+            // Case 2: SUSPICIOUS - Do not touch
+            if (transaction.Status == "SUSPICIOUS")
+            {
+                _logger.LogWarning("⚠️ Transaction {OrderId} is marked SUSPICIOUS. Ignoring update attempt.", result.OrderId);
+                return new { status = "success", message = "Transaction locked as SUSPICIOUS" };
+            }
+
+            // Case 3: FAILED or PENDING - Allow update (e.g. Retry succeeded)
+            if (transaction.Status == "FAILED")
+            {
+                _logger.LogInformation("🔄 Transaction {OrderId} was FAILED, now receiving new update. Allowing transition.", result.OrderId);
+            }
         }
 
         // Step 4: If NO, Insert the record (Race condition: Webhook arrived before Command Save)
