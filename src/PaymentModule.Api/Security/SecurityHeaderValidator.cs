@@ -74,14 +74,10 @@ public class SecurityHeaderValidator
                 return ValidationResult.Fail("Invalid API Key");
             }
 
-            // 2. Timestamp window
-            if (!IsTimestampValid(xTimestamp))
-            {
-                _logger.LogWarning("[SecurityHeaderValidator] Expired/invalid timestamp for {Source}", source);
-                return ValidationResult.Fail("Request timestamp expired");
-            }
+            // NOTE: Timestamp validation is handled by TimestampValidatorMiddleware (runs before this).
+            // Skipping duplicate check here to avoid redundancy.
 
-            // 3. Nonce replay check
+            // 2. Nonce replay check
             if (!IsNonceUnique(xNonce, xTimestamp))
             {
                 _logger.LogWarning("[SecurityHeaderValidator] Replayed nonce detected for {Source}", source);
@@ -125,18 +121,6 @@ public class SecurityHeaderValidator
     public int ActiveNonceCount => _usedNonces.Count;
 
     // ── Private ───────────────────────────────────────────────────────────────
-
-    private bool IsTimestampValid(string timestamp)
-    {
-        if (!long.TryParse(timestamp, out var ts)) return false;
-        var diff = Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - ts);
-        if (diff > MaxAgeSeconds)
-        {
-            _logger.LogWarning("[SecurityHeaderValidator] Timestamp age {Diff}s > {Max}s", diff, MaxAgeSeconds);
-            return false;
-        }
-        return true;
-    }
 
     private bool IsNonceUnique(string nonce, string timestamp)
     {

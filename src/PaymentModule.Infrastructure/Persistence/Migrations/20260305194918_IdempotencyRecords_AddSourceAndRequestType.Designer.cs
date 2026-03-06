@@ -12,8 +12,8 @@ using PaymentModule.Infrastructure.Persistence.DbContext;
 namespace PaymentModule.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SecureDbContext))]
-    [Migration("20260304080040_FailedMessages_ReplaceDeadLetterQueue")]
-    partial class FailedMessages_ReplaceDeadLetterQueue
+    [Migration("20260305194918_IdempotencyRecords_AddSourceAndRequestType")]
+    partial class IdempotencyRecords_AddSourceAndRequestType
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -100,13 +100,26 @@ namespace PaymentModule.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Response")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.HasKey("Key");
 
                     b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RequestType", "ExpiresAt")
+                        .HasDatabaseName("IX_IdempotencyRecords_RequestType_ExpiresAt");
 
                     b.ToTable("IdempotencyRecords", (string)null);
                 });

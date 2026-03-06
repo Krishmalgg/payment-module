@@ -6,6 +6,8 @@ using RabbitMQ.Client.Events;
 using PaymentModule.Infrastructure.Communication.Core.Connection;
 using PaymentModule.Infrastructure.Persistence.DbContext;
 using PaymentModule.Domain.Entities;
+using PaymentModule.Application.Common.Interfaces;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace PaymentModule.Infrastructure.Communication.Core.Abstractions;
@@ -117,13 +119,27 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
 
     private async Task OnMessageReceivedAsync(object sender, BasicDeliverEventArgs @event)
     {
-        // Timestamp check is fast — keep it synchronous before dispatching
-        if (!SkipTimestampValidation && !IsTimestampValid(@event.BasicProperties.Timestamp))
+        // Timestamp check — extract unix time from AMQP properties, validate via shared service
+        if (!SkipTimestampValidation)
         {
-            _logger.LogWarning("[{Consumer}] Discarding stale/missing-timestamp message on '{Queue}'.",
-                GetType().Name, QueueName);
-            await _channel!.BasicNackAsync(@event.DeliveryTag, false, requeue: false);
-            return;
+            var unixTime = @event.BasicProperties.Timestamp.UnixTime;
+            if (unixTime <= 0)
+            {
+                _logger.LogWarning("[{Consumer}] Missing AMQP timestamp — discarding message on '{Queue}'.",
+                    GetType().Name, QueueName);
+                await _channel!.BasicNackAsync(@event.DeliveryTag, false, requeue: false);
+                return;
+            }
+
+            using var tsScope = _serviceProvider.CreateScope();
+            var tsValidator = tsScope.ServiceProvider.GetRequiredService<IRequestValidatorService>();
+            if (!tsValidator.ValidateTimestamp(unixTime))
+            {
+                _logger.LogWarning("[{Consumer}] Stale AMQP timestamp — discarding message on '{Queue}'.",
+                    GetType().Name, QueueName);
+                await _channel!.BasicNackAsync(@event.DeliveryTag, false, requeue: false);
+                return;
+            }
         }
 
         // Acquire a concurrency slot (blocks only if all 10 workers are busy)
@@ -158,6 +174,27 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
         IReadOnlyBasicProperties props,
         ulong deliveryTag)
     {
+        // ── Idempotency check — skip processing if already handled ────────────
+        var idempotencyKey = ExtractIdempotencyKey(props.Headers);
+        var requestHash    = ComputeHash(message);
+
+        if (!string.IsNullOrEmpty(idempotencyKey))
+        {
+            using var checkScope = _serviceProvider.CreateScope();
+            var validator = checkScope.ServiceProvider.GetRequiredService<IRequestValidatorService>();
+            var idempotencyResult = await validator.CheckIdempotencyAsync(idempotencyKey, requestHash);
+
+            if (idempotencyResult.IsDuplicate)
+            {
+                _logger.LogInformation(
+                    "[{Consumer}] Duplicate RabbitMQ message detected — acking without processing. Key={Key}",
+                    GetType().Name, idempotencyKey);
+                await _channel!.BasicAckAsync(deliveryTag, false);
+                return;
+            }
+        }
+
+        // ── Retry loop ────────────────────────────────────────────────────────
         Exception? lastException = null;
 
         for (var attempt = 0; attempt < MaxRetries; attempt++)
@@ -176,6 +213,20 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
                     if (attempt > 0)
                         _logger.LogInformation("[{Consumer}] Message succeeded on attempt {Attempt}.",
                             GetType().Name, attempt + 1);
+
+                    // Store idempotency record so future duplicates are skipped
+                    if (!string.IsNullOrEmpty(idempotencyKey))
+                    {
+                        using var storeScope = _serviceProvider.CreateScope();
+                        var storeValidator = storeScope.ServiceProvider.GetRequiredService<IRequestValidatorService>();
+                        await storeValidator.StoreIdempotencyAsync(
+                            idempotencyKey,
+                            requestHash,
+                            response:    "processed",
+                            source:      "RabbitMq",
+                            requestType: GetType().Name.Replace("Consumer", ""));
+                    }
+
                     return;
                 }
 
@@ -233,20 +284,23 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private bool IsTimestampValid(AmqpTimestamp? timestamp)
+    private static string? ExtractIdempotencyKey(IDictionary<string, object?>? headers)
     {
-        if (timestamp == null || timestamp.Value.UnixTime <= 0)
+        if (headers == null) return null;
+        if (!headers.TryGetValue("Idempotency-Key", out var value)) return null;
+        return value switch
         {
-            _logger.LogWarning("[{Consumer}] Missing timestamp on RabbitMQ message.", GetType().Name);
-            return false;
-        }
-        var diff = Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timestamp.Value.UnixTime);
-        if (diff > 5)
-        {
-            _logger.LogWarning("[{Consumer}] Timestamp expired: diff={Diff}s > 5s.", GetType().Name, diff);
-            return false;
-        }
-        return true;
+            byte[] bytes => Encoding.UTF8.GetString(bytes),
+            string s     => s,
+            _            => value?.ToString()
+        };
+    }
+
+    private static string ComputeHash(string input)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(input);
+        return Convert.ToHexString(sha256.ComputeHash(bytes));
     }
 
     private async Task TryDeleteQueueAsync(CancellationToken ct)

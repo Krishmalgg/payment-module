@@ -139,6 +139,7 @@ builder.Services.AddSingleton<EnvelopeFactory>();
 builder.Services.AddSingleton<SecurityHeadersHandler>();  // signs payloads + adds HTTP headers
 builder.Services.AddSingleton<SecurityHeaderValidator>(); // validates incoming headers (replay, timestamp, HMAC)
 builder.Services.AddScoped<S2SResponseSigningFilter>();
+builder.Services.AddScoped<IRequestValidatorService, RequestValidatorService>();
 
 // Outbox Processing Strategies
 builder.Services.AddScoped<PaymentModule.Application.Common.Interfaces.IOutboxRetryPolicy,
@@ -240,8 +241,9 @@ app.UseMiddleware<RequestHeaderLoggingMiddleware>();
 // Log request body safely (redacts common sensitive fields)
 app.UseMiddleware<RequestBodyLoggingMiddleware>();
 
-app.UseMiddleware<NewS2SSecurityMiddleware>();
-app.UseMiddleware<IdempotencyMiddleware>();
+app.UseMiddleware<TimestampValidatorMiddleware>();   // 1. cheap  — DateTime math only
+app.UseMiddleware<IdempotencyMiddleware>();          // 2. medium — DB lookup
+app.UseMiddleware<NewS2SSecurityMiddleware>();       // 3. expensive — HMAC crypto
 
 // Routing
 app.MapControllers();

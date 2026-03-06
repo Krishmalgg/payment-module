@@ -22,14 +22,26 @@ public class IdempotencyRecordConfiguration : IEntityTypeConfiguration<Idempoten
         
         builder.Property(x => x.Response)
             .IsRequired();
-        
+
+        builder.Property(x => x.Source)
+            .IsRequired()
+            .HasMaxLength(20);
+
+        builder.Property(x => x.RequestType)
+            .IsRequired()
+            .HasMaxLength(50);
+
         builder.Property(x => x.CreatedAt)
             .IsRequired();
-        
+
         builder.Property(x => x.ExpiresAt)
             .IsRequired();
 
-        // Index for cleanup
+        // Index for cleanup queries
         builder.HasIndex(x => x.ExpiresAt);
+
+        // Index for per-type metrics and cleanup
+        builder.HasIndex(x => new { x.RequestType, x.ExpiresAt })
+               .HasDatabaseName("IX_IdempotencyRecords_RequestType_ExpiresAt");
     }
 }

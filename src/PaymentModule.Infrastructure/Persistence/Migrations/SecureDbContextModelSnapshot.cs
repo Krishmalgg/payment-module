@@ -97,13 +97,26 @@ namespace PaymentModule.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Response")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.HasKey("Key");
 
                     b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RequestType", "ExpiresAt")
+                        .HasDatabaseName("IX_IdempotencyRecords_RequestType_ExpiresAt");
 
                     b.ToTable("IdempotencyRecords", (string)null);
                 });
