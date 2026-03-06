@@ -33,3 +33,6 @@ TestResults/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Claude Code temp files
+tmpclaude*
