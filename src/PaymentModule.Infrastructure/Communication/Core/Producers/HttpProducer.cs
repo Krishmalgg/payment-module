@@ -35,7 +35,12 @@ public class HttpProducer : IMessageProducer
         _targetUrl = config["PaperMaker:NotificationUrl"] ?? "http://localhost:5201/api/webhooks/notifications/status";
     }
 
-    public async Task<ProducerResult> SendAsync(string endpointOrQueue, string payload, CancellationToken ct, string? correlationId = null)
+    public async Task<ProducerResult> SendAsync(
+        string endpointOrQueue,
+        string payload,
+        CancellationToken ct,
+        string? correlationId = null,
+        IDictionary<string, object?>? headers = null)
     {
         try
         {
@@ -48,11 +53,26 @@ public class HttpProducer : IMessageProducer
             Console.WriteLine($"[HttpProducer] Target: {url}");
             Console.WriteLine($"[HttpProducer] Payload: {payload}");
 
+            var providedTimestamp = headers is not null && headers.TryGetValue("x-timestamp", out var tsValue)
+                ? tsValue?.ToString()
+                : null;
+            var providedIdempotencyKey = headers is not null && headers.TryGetValue("x-idempotency-key", out var ikValue)
+                ? ikValue?.ToString()
+                : null;
+
             // 1. Generate Headers
-            var headers = _headerGenerator.GenerateHeaders("POST", url, payload);
+            var generatedHeaders = _headerGenerator.GenerateHeaders(
+                "POST",
+                url,
+                payload,
+                providedTimestamp,
+                providedIdempotencyKey);
+
+            if (!string.IsNullOrWhiteSpace(correlationId))
+                generatedHeaders["X-Correlation-ID"] = correlationId;
             
             Console.WriteLine("[HttpProducer] Outgoing Headers:");
-            foreach (var h in headers)
+            foreach (var h in generatedHeaders)
             {
                 Console.WriteLine($"  {h.Key}: {h.Value}");
             }
@@ -61,7 +81,7 @@ public class HttpProducer : IMessageProducer
             var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            foreach (var header in headers)
+            foreach (var header in generatedHeaders)
             {
                 request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             }

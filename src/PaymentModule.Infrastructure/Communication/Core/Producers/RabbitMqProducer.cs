@@ -22,7 +22,12 @@ public class RabbitMqProducer : IMessageProducer
         _logger = logger;
     }
 
-    public async Task<ProducerResult> SendAsync(string queue, string payload, CancellationToken ct, string? correlationId = null)
+    public async Task<ProducerResult> SendAsync(
+        string queue,
+        string payload,
+        CancellationToken ct,
+        string? correlationId = null,
+        IDictionary<string, object?>? headers = null)
     {
         var channel = await _channelPool.BorrowAsync(ct);
         try
@@ -31,13 +36,19 @@ public class RabbitMqProducer : IMessageProducer
             await _channelPool.EnsureQueueDeclaredAsync(channel, queue, ct);
 
             var body = Encoding.UTF8.GetBytes(payload);
+            var timestamp = ExtractTimestamp(headers);
             var properties = new BasicProperties
             {
-                Persistent = true // Message survives broker restart
+                Persistent = true, // Message survives broker restart
+                Timestamp = new AmqpTimestamp(timestamp)
             };
 
             if (!string.IsNullOrEmpty(correlationId))
                 properties.CorrelationId = correlationId;
+
+            var sanitizedHeaders = SanitizeHeaders(headers);
+            if (sanitizedHeaders.Count > 0)
+                properties.Headers = sanitizedHeaders;
 
             _logger.LogInformation("Publishing to RabbitMQ Queue: {Queue}", queue);
 
@@ -62,6 +73,35 @@ public class RabbitMqProducer : IMessageProducer
             // Always return the channel — ReturnAsync handles broken channels gracefully
             await _channelPool.ReturnAsync(channel);
         }
+    }
+
+    private static long ExtractTimestamp(IDictionary<string, object?>? headers)
+    {
+        if (headers is not null
+            && headers.TryGetValue("x-timestamp", out var timestampValue)
+            && long.TryParse(timestampValue?.ToString(), out var parsedTimestamp))
+        {
+            return parsedTimestamp;
+        }
+
+        return DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
+
+    private static Dictionary<string, object?> SanitizeHeaders(IDictionary<string, object?>? headers)
+    {
+        if (headers is null || headers.Count == 0)
+            return [];
+
+        var sanitized = new Dictionary<string, object?>();
+        foreach (var pair in headers)
+        {
+            if (string.Equals(pair.Key, "x-timestamp", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            sanitized[pair.Key] = pair.Value;
+        }
+
+        return sanitized;
     }
 }
 

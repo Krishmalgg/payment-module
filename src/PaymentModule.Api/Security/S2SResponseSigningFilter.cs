@@ -48,6 +48,13 @@ public class S2SResponseSigningFilter : IAsyncResultFilter
         var request  = context.HttpContext.Request;
         var response = context.HttpContext.Response;
 
+        if (request.Path.StartsWithSegments("/api/v1/webhooks"))
+        {
+            _logger.LogInformation("[S2SResponseSigningFilter] Skipping webhook response signing for {Path}", request.Path);
+            await next();
+            return;
+        }
+
         // ── 1. Extract raw payload ────────────────────────────────────────────
         var rawPayload = (context.Result as ObjectResult)?.Value;
 
@@ -65,8 +72,6 @@ public class S2SResponseSigningFilter : IAsyncResultFilter
         var isSuccess = context.Result is ObjectResult objResult && objResult.StatusCode.HasValue
             ? objResult.StatusCode.Value is >= 200 and < 300
             : true;
-
-        var envelope = _envelopeFactory.Create(rawPayload, correlationId, idempotencyKey, isSuccess);
 
         // ── 4. Sign PAYLOAD and inject security headers ───────────────────────
         var method       = request.Method.ToUpperInvariant();
@@ -98,6 +103,7 @@ public class S2SResponseSigningFilter : IAsyncResultFilter
             method, pathAndQuery, isSuccess, correlationId, ikDisplay);
 
         // ── 5. Replace result with the envelope ───────────────────────────────
+        var envelope = _envelopeFactory.Create(rawPayload, correlationId, idempotencyKey, isSuccess);
         context.Result = new OkObjectResult(envelope);
 
         await next();

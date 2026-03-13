@@ -79,9 +79,11 @@ public class PaymentsController : ControllerBase
     [HttpGet("stored-cards/{userId}")]
     public async Task<IActionResult> GetStoredCards(Guid userId)
     {
-        var result = await _mediator.Send(new GetStoredCardsQuery(userId));
-        Console.WriteLine("result :" + JsonSerializer.Serialize(result));
-        return Ok(result);
+        var cards = await _mediator.Send(new GetStoredCardsQuery(userId));
+        _logger.LogInformation("GetStoredCards returned {Count} cards for UserId {UserId}", cards.Count, userId);
+
+        // Return raw payload here — `S2SResponseSigningFilter` will wrap & sign the response.
+        return Ok(cards);
     }
 
     [HttpGet("success")]

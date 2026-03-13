@@ -7,6 +7,7 @@ using RabbitMQ.Client;
 using PaymentModule.Application.Features.Payments.Commands.AddCard;
 using PaymentModule.Infrastructure.Communication.Core.Abstractions;
 using PaymentModule.Infrastructure.Communication.Core.Connection;
+using PaymentModule.Infrastructure.Communication.Core.Producers;
 
 namespace PaymentModule.Infrastructure.Communication.Features.ReceiveAddCardRequests;
 
@@ -19,7 +20,7 @@ public class AddCardConsumer : RabbitMqBaseConsumer
     private readonly IConfiguration _configuration;
     private readonly ILogger<AddCardConsumer> _logger;
 
-    protected override string QueueName => _configuration["Messaging:RabbitMq:Queues:AddCard"] ?? "temp";
+    protected override string QueueName => _configuration["Messaging:RabbitMq:Queues:AddCard"] ?? "payment.addcard.requests";
 
     public AddCardConsumer(
         RabbitMqConnection connection,
@@ -55,17 +56,89 @@ public class AddCardConsumer : RabbitMqBaseConsumer
             // Trigger the application logic
             var result = await mediator.Send(command);
 
+            var finalResponseQueue = _configuration["Messaging:RabbitMq:Queues:AddCardResponse"]
+                ?? "payment.addcard.responses";
+
+            if (!string.IsNullOrEmpty(finalResponseQueue))
+            {
+                var producer = scope.ServiceProvider.GetRequiredService<RabbitMqProducer>();
+                var envelope = new
+                {
+                    isSuccess = true,
+                    payload = new
+                    {
+                        result.Success,
+                        result.MerchantId,
+                        result.OrderId,
+                        result.Currency,
+                        result.Hash,
+                        result.NotifyUrl,
+                        result.PreapprovalUrl,
+                        result.Amount
+                    }
+                };
+                var responsePayload = JsonSerializer.Serialize(envelope, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                Console.WriteLine($"\n[AddCardConsumer] === RESPONSE MESSAGE ===");
+                Console.WriteLine($"Queue: {finalResponseQueue}");
+                Console.WriteLine($"CorrelationId: {properties.CorrelationId}");
+                Console.WriteLine($"IsSuccess: true");
+                Console.WriteLine($"Payload:\n{responsePayload}");
+                Console.WriteLine($"=========================\n");
+
+                await producer.SendAsync(finalResponseQueue, responsePayload, CancellationToken.None, properties.CorrelationId);
+                _logger.LogInformation(
+                    "Successfully sent add card result to response queue: {Queue} (CorrelationId: {CorrelationId})",
+                    finalResponseQueue,
+                    properties.CorrelationId);
+            }
+            else
+            {
+                _logger.LogWarning("AddCard result not returned: No default response queue found.");
+            }
+
             _logger.LogInformation("Successfully initiated preapproval for User {UserId}. OrderId: {OrderId}", command.UserId, result.OrderId);
-            
-            // Note: Since this is an async consumer, the caller (the one who put the message in RMQ) 
-            // won't see the response (result). This is fine for fire-and-forget ingestion.
-            // If they need the result, they should use a Callback queue or different pattern.
-            
+
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process AddCard request from RabbitMQ");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var producer = scope.ServiceProvider.GetRequiredService<RabbitMqProducer>();
+                var finalResponseQueue = _configuration["Messaging:RabbitMq:Queues:AddCardResponse"]
+                    ?? "payment.addcard.responses";
+
+                var errorEnvelope = new
+                {
+                    isSuccess = false,
+                    error = ex.Message
+                };
+                var errorPayload = JsonSerializer.Serialize(errorEnvelope, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                Console.WriteLine($"\n[AddCardConsumer] === ERROR RESPONSE ===");
+                Console.WriteLine($"Queue: {finalResponseQueue}");
+                Console.WriteLine($"CorrelationId: {properties.CorrelationId}");
+                Console.WriteLine($"IsSuccess: false");
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"=========================\n");
+
+                await producer.SendAsync(finalResponseQueue, errorPayload, CancellationToken.None, properties.CorrelationId);
+            }
+            catch (Exception sendEx)
+            {
+                _logger.LogError(sendEx, "Failed to send add card error response to queue");
+            }
+
             return false; // Retry
         }
     }

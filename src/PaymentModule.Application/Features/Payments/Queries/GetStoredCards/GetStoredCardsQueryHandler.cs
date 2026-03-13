@@ -20,7 +20,7 @@ public class GetStoredCardsQueryHandler : IRequestHandler<GetStoredCardsQuery, L
     public async Task<List<StoredCardDto>> Handle(GetStoredCardsQuery request, CancellationToken cancellationToken)
     {
         // Use IgnoreQueryFilters to bypass RLS and allow S2S access to any user's cards
-        Console.WriteLine("request.UserId :" + request.UserId);
+        _logger.LogInformation("GetStoredCards request for UserId: {UserId}", request.UserId);
         var cards = await _dbContext.StoredCards
             .IgnoreQueryFilters()
             .Where(x => x.UserId == request.UserId && x.Status == "ACTIVE")
@@ -34,7 +34,7 @@ public class GetStoredCardsQueryHandler : IRequestHandler<GetStoredCardsQuery, L
                 CustomerToken = x.CustomerToken
             })
             .ToListAsync(cancellationToken);
-        Console.WriteLine("cards :" + JsonSerializer.Serialize(cards) );
+        _logger.LogInformation("Fetched {Count} stored cards for UserId {UserId}: {Cards}", cards.Count, request.UserId, JsonSerializer.Serialize(cards));
 
         return cards;
     }

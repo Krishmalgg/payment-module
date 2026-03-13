@@ -21,10 +21,11 @@ namespace PaymentModule.Infrastructure.Communication.Core.Abstractions;
 ///   to a Task.Run worker — the channel is never blocked waiting for processing.
 ///
 /// RETRY STRATEGY (per message, non-blocking):
-///   Attempt 1 — immediately
-///   Attempt 2 — immediately (no delay)
-///   Attempt 3 — immediately (no delay)
-///   After attempt 3 → store in DeadLetterQueue table, Nack without requeue.
+///   Attempt 1 — original delivery
+///   Attempt 2 — immediate in-process retry
+///   Attempt 3 — routed to .retry.2s, then returned by broker to main queue
+///   Attempt 4 — routed to .retry.15s, then returned by broker to main queue
+///   After attempt 4 → store in FailedMessages and publish to .dlq.
 ///
 /// SECURITY:
 ///   • Timestamp validation — rejects messages older than 5 s (replay prevention).
@@ -40,7 +41,7 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
     private IChannel? _channel;
 
     private const int MaxConcurrency = 10;
-    private const int MaxRetries = 3;
+    private const int FinalFailureAttempt = 4;
 
     protected abstract string QueueName { get; }
 
@@ -158,7 +159,7 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
         {
             try
             {
-                await ProcessWithRetryAsync(message, props, tag);
+                await ProcessWithRetryAsync(body, message, props, tag);
             }
             finally
             {
@@ -170,6 +171,7 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
     // ── Retry Loop (non-blocking) ─────────────────────────────────────────────
 
     private async Task ProcessWithRetryAsync(
+        byte[] body,
         string message,
         IReadOnlyBasicProperties props,
         ulong deliveryTag)
@@ -194,65 +196,166 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
             }
         }
 
-        // ── Retry loop ────────────────────────────────────────────────────────
-        Exception? lastException = null;
+        var brokerRetryCount = GetBrokerRetryCount(props.Headers);
+        var currentAttempt = brokerRetryCount + 1;
 
-        for (var attempt = 0; attempt < MaxRetries; attempt++)
+        try
         {
+            var success = await ProcessMessageAsync(message, props);
+            if (success)
+            {
+                await CompleteSuccessfulProcessingAsync(deliveryTag, idempotencyKey, requestHash, currentAttempt);
+                return;
+            }
+
+            _logger.LogWarning(
+                "[{Consumer}] Processing returned false on attempt {Attempt} for '{Queue}'.",
+                GetType().Name,
+                currentAttempt,
+                QueueName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "[{Consumer}] Exception on attempt {Attempt} for queue '{Queue}'.",
+                GetType().Name,
+                currentAttempt,
+                QueueName);
+        }
+
+        if (brokerRetryCount == 0)
+        {
+            _logger.LogInformation(
+                "[{Consumer}] First failure on '{Queue}' — retrying immediately in-process.",
+                GetType().Name,
+                QueueName);
+
             try
             {
-                if (attempt > 0)
-                    _logger.LogInformation(
-                        "[{Consumer}] Retry attempt {Attempt}/{Max} on '{Queue}'.",
-                        GetType().Name, attempt + 1, MaxRetries, QueueName);
-
-                var success = await ProcessMessageAsync(message, props);
-                if (success)
+                var immediateRetrySuccess = await ProcessMessageAsync(message, props);
+                if (immediateRetrySuccess)
                 {
-                    await _channel!.BasicAckAsync(deliveryTag, false);
-                    if (attempt > 0)
-                        _logger.LogInformation("[{Consumer}] Message succeeded on attempt {Attempt}.",
-                            GetType().Name, attempt + 1);
-
-                    // Store idempotency record so future duplicates are skipped
-                    if (!string.IsNullOrEmpty(idempotencyKey))
-                    {
-                        using var storeScope = _serviceProvider.CreateScope();
-                        var storeValidator = storeScope.ServiceProvider.GetRequiredService<IRequestValidatorService>();
-                        await storeValidator.StoreIdempotencyAsync(
-                            idempotencyKey,
-                            requestHash,
-                            response:    "processed",
-                            source:      "RabbitMq",
-                            requestType: GetType().Name.Replace("Consumer", ""));
-                    }
-
+                    await CompleteSuccessfulProcessingAsync(deliveryTag, idempotencyKey, requestHash, attemptNumber: 2);
                     return;
                 }
 
-                _logger.LogWarning("[{Consumer}] ProcessMessageAsync returned false on attempt {Attempt}/{Max}.",
-                    GetType().Name, attempt + 1, MaxRetries);
+                _logger.LogWarning(
+                    "[{Consumer}] Immediate retry returned false for '{Queue}'. Routing to retry queue.",
+                    GetType().Name,
+                    QueueName);
             }
             catch (Exception ex)
             {
-                lastException = ex;
-                _logger.LogWarning(ex, "[{Consumer}] Exception on attempt {Attempt}/{Max} for queue '{Queue}'.",
-                    GetType().Name, attempt + 1, MaxRetries, QueueName);
+                _logger.LogWarning(
+                    ex,
+                    "[{Consumer}] Immediate retry threw for queue '{Queue}'. Routing to retry queue.",
+                    GetType().Name,
+                    QueueName);
             }
         }
 
-        // ── All retries exhausted → DLQ ──
-        _logger.LogError(lastException,
-            "[{Consumer}] All {Max} attempts failed for message on '{Queue}'. Storing in DeadLetterQueue.",
-            GetType().Name, MaxRetries, QueueName);
+        var targetQueue = brokerRetryCount switch
+        {
+            0 => $"{QueueName}.retry.2s",
+            1 => $"{QueueName}.retry.15s",
+            _ => $"{QueueName}.dlq"
+        };
 
-        await StoreToDlqAsync(message, lastException?.Message ?? "ProcessMessageAsync returned false after all retries");
-        await _channel!.BasicNackAsync(deliveryTag, false, requeue: false);
+        var finalAttemptNumber = brokerRetryCount >= 2 ? FinalFailureAttempt : brokerRetryCount + 2;
+
+        await RouteFailedMessageAsync(body, props, deliveryTag, message, targetQueue, finalAttemptNumber);
     }
 
     // ── DLQ Persistence ───────────────────────────────────────────────────────
 
-    private async Task StoreToDlqAsync(string payload, string reason)
+    private async Task CompleteSuccessfulProcessingAsync(
+        ulong deliveryTag,
+        string? idempotencyKey,
+        string requestHash,
+        int attemptNumber)
+    {
+        await _channel!.BasicAckAsync(deliveryTag, false);
+
+        if (attemptNumber > 1)
+        {
+            _logger.LogInformation(
+                "[{Consumer}] Message succeeded on attempt {Attempt} for '{Queue}'.",
+                GetType().Name,
+                attemptNumber,
+                QueueName);
+        }
+
+        if (string.IsNullOrEmpty(idempotencyKey))
+            return;
+
+        using var storeScope = _serviceProvider.CreateScope();
+        var storeValidator = storeScope.ServiceProvider.GetRequiredService<IRequestValidatorService>();
+        await storeValidator.StoreIdempotencyAsync(
+            idempotencyKey,
+            requestHash,
+            response:    "processed",
+            source:      "RabbitMq",
+            requestType: GetType().Name.Replace("Consumer", ""));
+    }
+
+    private async Task RouteFailedMessageAsync(
+        byte[] body,
+        IReadOnlyBasicProperties props,
+        ulong deliveryTag,
+        string payload,
+        string targetQueue,
+        int attemptNumber)
+    {
+        try
+        {
+            var publishProps = CloneProperties(props);
+
+            await _channel!.BasicPublishAsync(
+                exchange: string.Empty,
+                routingKey: targetQueue,
+                mandatory: false,
+                basicProperties: publishProps,
+                body: body,
+                cancellationToken: CancellationToken.None);
+
+            await _channel.BasicAckAsync(deliveryTag, false);
+
+            if (targetQueue.EndsWith(".dlq", StringComparison.Ordinal))
+            {
+                _logger.LogError(
+                    "[{Consumer}] Attempt {Attempt} failed for '{Queue}'. Message routed to '{TargetQueue}'.",
+                    GetType().Name,
+                    attemptNumber,
+                    QueueName,
+                    targetQueue);
+
+                await StoreToDlqAsync(payload, $"Failed after {attemptNumber} attempts", attemptNumber);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "[{Consumer}] Attempt {Attempt} failed for '{Queue}'. Message routed to '{TargetQueue}'.",
+                    GetType().Name,
+                    attemptNumber,
+                    QueueName,
+                    targetQueue);
+            }
+        }
+        catch (Exception publishEx)
+        {
+            _logger.LogError(
+                publishEx,
+                "[{Consumer}] Failed to route message from '{Queue}' to '{TargetQueue}'. Requeueing original delivery.",
+                GetType().Name,
+                QueueName,
+                targetQueue);
+
+            await _channel!.BasicNackAsync(deliveryTag, false, requeue: true);
+        }
+    }
+
+    private async Task StoreToDlqAsync(string payload, string reason, int retryCount)
     {
         try
         {
@@ -266,7 +369,7 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
                 communicationType: "RabbitMq",
                 payload: payload,
                 failureReason: reason,
-                retryCount: MaxRetries);
+                retryCount: retryCount);
 
             db.FailedMessages.Add(entry);
             await db.SaveChangesAsync();
@@ -301,6 +404,86 @@ public abstract class RabbitMqBaseConsumer : BackgroundService
         using var sha256 = SHA256.Create();
         var bytes = Encoding.UTF8.GetBytes(input);
         return Convert.ToHexString(sha256.ComputeHash(bytes));
+    }
+
+    private static BasicProperties CloneProperties(IReadOnlyBasicProperties props)
+    {
+        var clone = new BasicProperties
+        {
+            AppId = props.AppId,
+            ContentEncoding = props.ContentEncoding,
+            ContentType = props.ContentType,
+            CorrelationId = props.CorrelationId,
+            DeliveryMode = props.DeliveryMode,
+            Expiration = props.Expiration,
+            MessageId = props.MessageId,
+            Persistent = props.Persistent,
+            Priority = props.Priority,
+            ReplyTo = props.ReplyTo,
+            Timestamp = props.Timestamp,
+            Type = props.Type,
+            UserId = props.UserId,
+            Headers = props.Headers is null
+                ? null
+                : new Dictionary<string, object?>(props.Headers)
+        };
+
+        return clone;
+    }
+
+    private static int GetBrokerRetryCount(IDictionary<string, object?>? headers)
+    {
+        if (headers is null || !headers.TryGetValue("x-death", out var xDeath) || xDeath is not IList<object> deaths)
+            return 0;
+
+        var retryCount = 0;
+
+        foreach (var deathEntry in deaths)
+        {
+            if (deathEntry is not IDictionary<string, object?> death)
+                continue;
+
+            var queue = ReadHeaderString(death, "queue");
+            if (string.IsNullOrEmpty(queue) || !queue.Contains(".requests.retry.", StringComparison.Ordinal))
+                continue;
+
+            retryCount += ReadHeaderCount(death, "count");
+        }
+
+        return retryCount;
+    }
+
+    private static int ReadHeaderCount(IDictionary<string, object?> source, string key)
+    {
+        if (!source.TryGetValue(key, out var value) || value is null)
+            return 1;
+
+        return value switch
+        {
+            byte byteValue => byteValue,
+            sbyte sbyteValue => sbyteValue,
+            short shortValue => shortValue,
+            ushort ushortValue => ushortValue,
+            int intValue => intValue,
+            uint uintValue => (int)uintValue,
+            long longValue => (int)longValue,
+            ulong ulongValue => (int)ulongValue,
+            byte[] bytes when int.TryParse(Encoding.UTF8.GetString(bytes), out var parsed) => parsed,
+            _ => 1
+        };
+    }
+
+    private static string? ReadHeaderString(IDictionary<string, object?> source, string key)
+    {
+        if (!source.TryGetValue(key, out var value) || value is null)
+            return null;
+
+        return value switch
+        {
+            byte[] bytes => Encoding.UTF8.GetString(bytes),
+            string stringValue => stringValue,
+            _ => value.ToString()
+        };
     }
 
     private async Task TryDeleteQueueAsync(CancellationToken ct)

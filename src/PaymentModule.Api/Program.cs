@@ -131,6 +131,7 @@ builder.Services.AddScoped<IOutboxService, OutboxService>();
 builder.Services.AddSingleton<IOutboxTrigger, OutboxTrigger>();
 builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqConnection>();
 builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqChannelPool>();
+builder.Services.AddSingleton<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqTopologyInitializer>();
 builder.Services.AddTransient<IS2SHeaderGenerator, S2SHeaderGenerator>();
 // New S2S helpers — HmacSigner is stateless so singleton is fine;
 // S2SResponseSigningFilter is scoped so it can receive scoped dependencies if needed.
@@ -212,6 +213,14 @@ builder.Services.AddControllers(options =>
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+if (string.Equals(communicationMode, "RabbitMq", StringComparison.OrdinalIgnoreCase))
+{
+    using var initScope = app.Services.CreateScope();
+    var topologyInitializer = initScope.ServiceProvider
+        .GetRequiredService<PaymentModule.Infrastructure.Communication.Core.Connection.RabbitMqTopologyInitializer>();
+    await topologyInitializer.InitializeAsync();
+}
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())

@@ -23,6 +23,13 @@ public class TimestampValidatorMiddleware
 
     public async Task InvokeAsync(HttpContext context, IRequestValidatorService validator)
     {
+        if (context.Request.Path.StartsWithSegments("/api/v1/webhooks"))
+        {
+            _logger.LogInformation("[TimestampValidator] Skipping webhook path {Path}", context.Request.Path);
+            await _next(context);
+            return;
+        }
+
         var method = context.Request.Method.ToUpperInvariant();
         if (method != "POST" && method != "PUT" && method != "PATCH")
         {

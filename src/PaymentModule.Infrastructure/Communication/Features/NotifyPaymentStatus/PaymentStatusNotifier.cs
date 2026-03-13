@@ -77,31 +77,72 @@ public class PaymentStatusNotifier : IPaymentStatusNotifier, IOutboxMessageHandl
     public async Task<ProducerResult> HandleAsync(string payload, CancellationToken cancellationToken)
     {
         var producer = _producerFactory.GetProducer();
-        
-        // Default to Status Notification URL
-        string destination = _configuration["PaperMaker:NotificationUrl"] 
-                             ?? "http://localhost:5201/api/webhooks/notifications/status";
+        string? correlationId = null;
+        var idempotencyKey = Guid.NewGuid().ToString();
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        PaymentStatusPayload? message = null;
 
-        try 
+        var isRabbitMq = string.Equals(
+            _configuration["PaymentServer:CommunicationMode"] ?? _configuration["Messaging:Provider"],
+            "RabbitMq",
+            StringComparison.OrdinalIgnoreCase);
+
+        string destination = isRabbitMq
+            ? _configuration["Messaging:RabbitMq:Queues:PaymentStatusNotification"]
+                ?? "main.notifications.status.requests"
+            : _configuration["PaperMaker:NotificationUrl"]
+                ?? "http://localhost:5201/api/webhooks/notifications/status";
+
+        try
         {
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var message = JsonSerializer.Deserialize<PaymentStatusPayload>(payload, options);
-            
+            message = JsonSerializer.Deserialize<PaymentStatusPayload>(payload, options);
+
             // Check if status is SUSPICIOUS and route accordingly
             if (message?.Status != null && message.Status.Equals("SUSPICIOUS", StringComparison.OrdinalIgnoreCase))
             {
-                destination = _configuration["PaperMaker:SuspiciousActivityUrl"] 
-                              ?? "http://localhost:5201/api/v1/notifications/suspicious";
-                _logger.LogWarning("⚠️ Routing PaymentStatus to SuspiciousActivityUrl for Transaction {TransactionId}", message.TransactionId);
+                destination = isRabbitMq
+                    ? _configuration["Messaging:RabbitMq:Queues:SuspiciousActivityNotification"]
+                        ?? "main.notifications.suspicious.requests"
+                    : _configuration["PaperMaker:SuspiciousActivityUrl"]
+                        ?? "http://localhost:5201/api/webhooks/notifications/suspicious";
+
+                _logger.LogWarning(
+                    "⚠️ Routing PaymentStatus to {Destination} for Transaction {TransactionId}",
+                    destination,
+                    message.TransactionId);
             }
         }
         catch (Exception ex)
         {
-             _logger.LogError(ex, "Failed to parse payload for routing logic. Using default destination.");
+            _logger.LogError(ex, "Failed to parse payload for routing logic. Using default destination.");
         }
 
-        _logger.LogInformation("Handling Outbox Message: {Type} sending to {Destination}", MessageType, destination);
+        _logger.LogInformation(
+            "Handling Outbox Message: {Type} sending to {Destination} (CorrelationId: {CorrelationId}, IdempotencyKey: {IdempotencyKey}, Timestamp: {Timestamp})",
+            MessageType,
+            destination,
+            correlationId,
+            idempotencyKey,
+            timestamp);
+        _logger.LogInformation(
+            "Notification payload (CorrelationId: {CorrelationId}, IdempotencyKey: {IdempotencyKey}, Timestamp: {Timestamp}): {Payload}",
+            correlationId,
+            idempotencyKey,
+            timestamp,
+            payload);
+
+        var headers = new Dictionary<string, object?>
+        {
+            ["x-idempotency-key"] = idempotencyKey,
+            ["x-timestamp"] = timestamp
+        };
+
+        if (isRabbitMq)
+        {
+            correlationId = Guid.NewGuid().ToString();
+        }
         
-        return await producer.SendAsync(destination, payload, cancellationToken);
+        return await producer.SendAsync(destination, payload, cancellationToken, correlationId, headers);
     }
 }

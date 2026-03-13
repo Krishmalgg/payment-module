@@ -9,5 +9,10 @@ public interface IMessageProducer
     /// <param name="payload">The JSON payload.</param>
     /// <param name="ct">Cancellation Token.</param>
     /// <returns>ProducerResult containing success status and optional error message.</returns>
-    Task<ProducerResult> SendAsync(string destination, string payload, CancellationToken ct = default, string? correlationId = null);
+    Task<ProducerResult> SendAsync(
+        string destination,
+        string payload,
+        CancellationToken ct = default,
+        string? correlationId = null,
+        IDictionary<string, object?>? headers = null);
 }

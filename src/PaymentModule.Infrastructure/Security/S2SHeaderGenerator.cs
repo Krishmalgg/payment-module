@@ -9,7 +9,7 @@ namespace PaymentModule.Infrastructure.Security;
 
 public interface IS2SHeaderGenerator
 {
-    Dictionary<string, string> GenerateHeaders(string method, string url, string body);
+    Dictionary<string, string> GenerateHeaders(string method, string url, string body, string? timestamp = null, string? idempotencyKey = null);
 }
 
 public class S2SHeaderGenerator : IS2SHeaderGenerator
@@ -23,7 +23,7 @@ public class S2SHeaderGenerator : IS2SHeaderGenerator
         _logger = logger;
     }
 
-    public Dictionary<string, string> GenerateHeaders(string method, string url, string body)
+    public Dictionary<string, string> GenerateHeaders(string method, string url, string body, string? timestamp = null, string? idempotencyKey = null)
     {
         // 1. Get Active Credentials (use first available or specific NEW/OLD logic if needed)
         // For simplicity, we use the first available key/secret pair.
@@ -38,7 +38,7 @@ public class S2SHeaderGenerator : IS2SHeaderGenerator
         }
 
         // 2. Generate Timestamp and Nonce
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        timestamp ??= DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
         var nonce = Guid.NewGuid().ToString();
 
         // 3. Construct Canonical String
@@ -59,14 +59,14 @@ public class S2SHeaderGenerator : IS2SHeaderGenerator
         _logger.LogInformation("[S2S] Generated Signature: {Sig}", signature);
 
        // (inside GenerateHeaders, after computing `signature` and `pathAndQuery`)
-return new Dictionary<string, string>
-{
-    { "x-api-key", apiKey },
-    { "x-timestamp", timestamp },
-    { "x-nonce", nonce },
-    { "x-signature", signature },
-    { "x-signed-path", pathAndQuery },      // <-- new header with path+query used for signing
-    { "Idempotency-Key", Guid.NewGuid().ToString() }
-};
+        return new Dictionary<string, string>
+        {
+            { "x-api-key", apiKey },
+            { "x-timestamp", timestamp },
+            { "x-nonce", nonce },
+            { "x-signature", signature },
+            { "x-signed-path", pathAndQuery },
+            { "x-idempotency-key", idempotencyKey ?? Guid.NewGuid().ToString() }
+        };
     }
 }

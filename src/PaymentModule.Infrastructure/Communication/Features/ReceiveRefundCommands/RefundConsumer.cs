@@ -21,7 +21,7 @@ public class RefundConsumer : RabbitMqBaseConsumer
     private readonly IConfiguration _configuration;
     private readonly ILogger<RefundConsumer> _logger;
 
-    protected override string QueueName => _configuration["Messaging:RabbitMq:Queues:Refund"] ?? "payment.refund.queue";
+    protected override string QueueName => _configuration["Messaging:RabbitMq:Queues:Refund"] ?? "payment.refund.requests";
 
     public RefundConsumer(
         RabbitMqConnection connection,

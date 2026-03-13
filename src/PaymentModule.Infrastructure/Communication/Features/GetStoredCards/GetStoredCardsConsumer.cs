@@ -20,7 +20,7 @@ public class GetStoredCardsConsumer : RabbitMqBaseConsumer
     private readonly IConfiguration _configuration;
     private readonly ILogger<GetStoredCardsConsumer> _logger;
 
-    protected override string QueueName => _configuration["Messaging:RabbitMq:Queues:GetStoredCards"] ?? "payment.getstoredcards.requests";
+    protected override string QueueName => _configuration["Messaging:RabbitMq:Queues:GetStoredCards"] ?? "payment.storedcards.requests";
 
     public GetStoredCardsConsumer(
         RabbitMqConnection connection,
@@ -64,11 +64,18 @@ public class GetStoredCardsConsumer : RabbitMqBaseConsumer
             if (!string.IsNullOrEmpty(responseQueue))
             {
                 var producer = scope.ServiceProvider.GetRequiredService<RabbitMqProducer>();
-                var responsePayload = JsonSerializer.Serialize(new { UserId = request.UserId, Cards = cards });
-                
+                var responsePayload = JsonSerializer.Serialize(new
+                {
+                    isSuccess = true,
+                    payload = new
+                    {
+                        cards = cards
+                    }
+                });
+
                 // Use CorrelationId from request to match response
                 await producer.SendAsync(responseQueue, responsePayload, CancellationToken.None, properties.CorrelationId);
-                _logger.LogInformation("Successfully sent card details to response queue: {Queue} (CorrelationId: {CorrelationId})", 
+                _logger.LogInformation("Successfully sent card details to response queue: {Queue} (CorrelationId: {CorrelationId})",
                     responseQueue, properties.CorrelationId);
             }
             else 
