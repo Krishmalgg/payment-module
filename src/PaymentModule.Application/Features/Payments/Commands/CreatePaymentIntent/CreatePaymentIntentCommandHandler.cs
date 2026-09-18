@@ -1,122 +1,157 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 using PaymentModule.Application.Common.Interfaces;
+using PaymentModule.Application.Common.Mappings;
+using PaymentModule.Domain.Entities;
 using PaymentModule.Domain.Ports;
 using PaymentModule.Domain.ValueObjects;
-using PaymentModule.Domain.Entities;
 
 namespace PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent;
 
-public class CreatePaymentIntentCommandHandler : IRequestHandler<CreatePaymentIntentCommand, CreatePaymentIntentResponse>
+public class CreatePaymentIntentCommandHandler
+    : IRequestHandler<CreatePaymentIntentCommand, CreatePaymentIntentResponse>
 {
-    private readonly IPaymentGateway _paymentGateway;
+    private readonly IPaymentGatewayResolver _gateways;
     private readonly IApplicationDbContext _dbContext;
-    private readonly IOutboxService _outbox;
+    private readonly ILogger<CreatePaymentIntentCommandHandler> _logger;
 
     public CreatePaymentIntentCommandHandler(
-        IPaymentGateway paymentGateway, 
+        IPaymentGatewayResolver gateways,
         IApplicationDbContext dbContext,
-        IOutboxService outbox)
+        ILogger<CreatePaymentIntentCommandHandler> logger)
     {
-        _paymentGateway = paymentGateway;
+        _gateways = gateways;
         _dbContext = dbContext;
-        _outbox = outbox;
+        _logger = logger;
     }
 
-    public async Task<CreatePaymentIntentResponse> Handle(CreatePaymentIntentCommand request, CancellationToken cancellationToken)
+    public async Task<CreatePaymentIntentResponse> Handle(
+        CreatePaymentIntentCommand request,
+        CancellationToken cancellationToken)
     {
-        // Initialize metadata from the request or create new
-        var metadata = request.Metadata != null 
-            ? new Dictionary<string, string>(request.Metadata) 
-            : new Dictionary<string, string>();
-
-        // Add standard fields for Gateway
-        if (!string.IsNullOrEmpty(request.UserData?.Email)) metadata["email"] = request.UserData.Email;
-        if (!string.IsNullOrEmpty(request.OrderId)) metadata["order_id"] = request.OrderId;
-        if (!string.IsNullOrEmpty(request.UserData?.UserId)) metadata["user_id"] = request.UserData.UserId;
-        if (!string.IsNullOrEmpty(request.UserData?.Address)) metadata["address"] = request.UserData.Address;
-        if (!string.IsNullOrEmpty(request.UserData?.City)) metadata["city"] = request.UserData.City;
-        if (!string.IsNullOrEmpty(request.UserData?.Country)) metadata["country"] = request.UserData.Country;
-        if (!string.IsNullOrEmpty(request.UserData?.FullName)) 
-        {
-            var names = request.UserData.FullName.Split(' ', 2);
-            metadata["first_name"] = names[0];
-            if (names.Length > 1) metadata["last_name"] = names[1];
-        }
-
-        Console.WriteLine("[CommandHandler] Final Metadata for Gateway:");
-        foreach (var item in metadata)
-        {
-            Console.WriteLine($"  -> {item.Key}: {item.Value}");
-        }
-
-        // Validate OrderId
         if (string.IsNullOrEmpty(request.OrderId))
-        {
             throw new ArgumentException("OrderId is required");
-        }
-        // Parse UserId as Guid
+
         if (!Guid.TryParse(request.UserData?.UserId, out var userIdGuid))
-        {
             throw new ArgumentException("UserId must be a valid GUID");
-        }
 
-        // Create Money VO for PaymentGateway
-        var money = new Money(request.Amount, request.Currency);
-        
-        // Try to parse OrderId as Guid for the Internal Gateway VO
-        // If it's not a Guid, we generate a new one, but for PayHere we usually want the business OrderId
-        var transactionIdGuid = Guid.NewGuid(); // Fallback
+        var user = request.UserData!;
 
+        // Which provider handles this payment. No hardcoded provider name anywhere below.
+        var gateway = _gateways.Resolve(request.Provider);
 
-        // Create Transaction entity BEFORE calling gateway
-        // This ensures the record is ready for the webhook even if it arrives instantly.
+        // Resolve the stored-card token. Preferring PaymentMethodId means the raw token
+        // never has to leave the server, which is why that path exists.
+        var token = await ResolvePaymentMethodTokenAsync(user, userIdGuid, cancellationToken);
+
+        var metadata = BuildMetadata(request, user);
+
+        var displayName = user.ResolveDisplayName();
+        if (string.IsNullOrWhiteSpace(displayName))
+            throw new ArgumentException("A customer name is required (FirstName/LastName or FullName)");
+
+        // --- PRE-PERSISTENCE (avoid the webhook-arrives-first race) ---
         var transaction = new Transaction(
-            transactionIdGuid,
+            Guid.NewGuid(),
             request.OrderId!,
             userIdGuid,
             request.Amount,
             request.Currency,
-            "PAYHERE", // We know we are using PayHere in this slice
-            request.UserData?.FullName ?? throw new ArgumentException("FullName is required"),
-            request.UserData?.Email
-        );
+            gateway.Provider.ToUpperInvariant(),
+            displayName,
+            user.Email);
 
-        // --- PRE-PERSISTENCE (Avoid Race Condition) ---
         try
         {
             _dbContext.Transactions.Add(transaction);
             await _dbContext.SaveChangesAsync(cancellationToken);
-            Console.WriteLine($"[CommandHandler] Transaction {transaction.OrderId} pre-registered as PENDING.");
+            _logger.LogInformation("Transaction {OrderId} pre-registered as PENDING.", transaction.OrderId);
         }
         catch (DbUpdateException)
         {
-            // If the webhook somehow arrived and created the record before we even finished this save
-            Console.WriteLine($"[CommandHandler] Note: Transaction {transaction.OrderId} was already registered by webhook.");
+            // The webhook may have created the record before we finished this save.
+            _logger.LogWarning("Transaction {OrderId} was already registered (likely by webhook).", transaction.OrderId);
         }
 
-        // Call gateway to get fields and hash (This is where the charge happens for instant pay)
-        var result = await _paymentGateway.CreatePaymentIntent(
-            new TransactionId(transactionIdGuid), 
-            money,
+        var result = await gateway.CreatePaymentIntent(
+            new TransactionId(transaction.Id),
+            new Money(request.Amount, request.Currency),
             metadata,
             cancellationToken,
-            request.UserData?.CustomerToken
-        );
+            token);
 
-        Console.WriteLine("[CommandHandler] Gateway Response Action: " + result.Action);
-        foreach (var field in result.Fields)
-        {
-             Console.WriteLine($"  -> {field.Key}: {field.Value}");
-        }
+        _logger.LogInformation(
+            "Gateway {Provider} returned action={Action} status={Status} for Order {OrderId}",
+            result.Provider, result.Action, result.Status, request.OrderId);
 
         return new CreatePaymentIntentResponse(
             TransactionId: transaction.Id.ToString(),
-            Gateway: result.Gateway,
-            Action: result.Action,
+            OrderId: transaction.OrderId,
+            Provider: result.Provider,
+            Action: result.Action.ToWire(),
+            Status: result.Status.ToWire(),
             Url: result.Url,
-            Fields: result.Fields
-        );
+            Fields: result.Fields);
+    }
+
+    /// <summary>
+    /// Turns a PaymentMethodId into the provider token by looking it up for THIS user.
+    /// Scoping the lookup by UserId is what stops one user charging another user's card.
+    /// </summary>
+    private async Task<string?> ResolvePaymentMethodTokenAsync(
+        UserData user,
+        Guid userId,
+        CancellationToken ct)
+    {
+        if (user.PaymentMethodId is not { } cardId)
+            return user.ResolvedToken;
+
+        var card = await _dbContext.StoredCards
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == cardId && c.UserId == userId && c.Status == "ACTIVE", ct);
+
+        if (card is null)
+        {
+            throw new ArgumentException(
+                $"Stored card {cardId} was not found, is not active, or does not belong to this user.");
+        }
+
+        return card.CustomerToken;
+    }
+
+    /// <summary>
+    /// Builds the neutral metadata bag handed to the adapter. Adapters decide how to
+    /// transmit it (PayHere uses custom_1/custom_2; Stripe uses its metadata object).
+    /// </summary>
+    private static Dictionary<string, string> BuildMetadata(
+        CreatePaymentIntentCommand request,
+        UserData user)
+    {
+        var metadata = request.Metadata is not null
+            ? new Dictionary<string, string>(request.Metadata)
+            : new Dictionary<string, string>();
+
+        var (firstName, lastName) = user.ResolveName();
+        var billing = user.ResolveBilling();
+
+        void Set(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value)) metadata[key] = value;
+        }
+
+        Set("order_id", request.OrderId);
+        Set("user_id", user.UserId);
+        Set("email", user.Email);
+        Set("first_name", firstName);
+        Set("last_name", lastName);
+        Set("address", billing.Line1);
+        Set("address_line2", billing.Line2);
+        Set("city", billing.City);
+        Set("state", billing.State);
+        Set("postal_code", billing.PostalCode);
+        Set("country", billing.Country);
+
+        return metadata;
     }
 }

@@ -71,9 +71,11 @@ public class PaymentIntentConsumer : RabbitMqBaseConsumer
                 var envelope = new { 
                     isSuccess = true,
                     payload = new {
-                        OrderId = command.OrderId, 
-                        Gateway = result.Gateway,
+                        TransactionId = result.TransactionId,
+                        OrderId = result.OrderId,
+                        Provider = result.Provider,
                         Action = result.Action,
+                        Status = result.Status,
                         Url = result.Url,
                         Fields = result.Fields
                     }

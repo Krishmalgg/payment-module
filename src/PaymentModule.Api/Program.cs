@@ -106,23 +106,25 @@ builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PaperMaker
     if (envKeys.Length > 0) options.ApiKeys = envKeys.ToList();
     if (envSecrets.Length > 0) options.HmacSecrets = envSecrets.ToList();
 });
-builder.Services.AddHttpClient(); // Required for PayHereAdapter
+builder.Services.AddHttpClient(); // Required by gateway adapters that call provider APIs
 
 // Outbox Processing Configuration
 builder.Services.Configure<PaymentModule.Infrastructure.Configuration.OutboxProcessingOptions>(
     builder.Configuration.GetSection("OutboxProcessing"));
 
-var provider = builder.Configuration["PaymentGateway:Provider"] ?? "Mock";
-if (string.Equals(provider, "PayHere", StringComparison.OrdinalIgnoreCase))
-{
-    builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PayHereOptions>(
-        builder.Configuration.GetSection("PayHere"));
-    builder.Services.AddSingleton<IPaymentGateway, PayHereAdapter>();
-}
-else
-{
-    // builder.Services.AddSingleton<IPaymentGateway, MockAdapter>();
-}
+// Payment gateway adapters.
+// ALL adapters are registered; the provider is chosen per request by the resolver,
+// falling back to PaymentGateway:Provider. Adding a gateway = add one line here.
+builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PaymentGatewayOptions>(
+    builder.Configuration.GetSection("PaymentGateway"));
+builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PayHereOptions>(
+    builder.Configuration.GetSection("PayHere"));
+
+builder.Services.AddSingleton<IPaymentGateway, PayHereAdapter>();
+builder.Services.AddSingleton<IPaymentGateway, MockAdapter>();
+
+builder.Services.AddSingleton<IPaymentGatewayResolver,
+    PaymentModule.Infrastructure.Gateways.PaymentGatewayResolver>();
 
 // Infrastructure Services
 builder.Services.AddHttpContextAccessor();

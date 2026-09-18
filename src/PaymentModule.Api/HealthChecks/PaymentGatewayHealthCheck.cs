@@ -3,28 +3,41 @@ using PaymentModule.Domain.Ports;
 
 namespace PaymentModule.Api.HealthChecks;
 
+/// <summary>
+/// Reports which gateway adapters are wired up and which one is the default.
+/// Resolving the default also surfaces a misconfigured PaymentGateway:Provider
+/// as an unhealthy check rather than as a failure on the first real payment.
+/// </summary>
 public class PaymentGatewayHealthCheck : IHealthCheck
 {
-    private readonly IPaymentGateway _paymentGateway;
+    private readonly IPaymentGatewayResolver _gateways;
 
-    public PaymentGatewayHealthCheck(IPaymentGateway paymentGateway)
+    public PaymentGatewayHealthCheck(IPaymentGatewayResolver gateways)
     {
-        _paymentGateway = paymentGateway;
+        _gateways = gateways;
     }
 
-    public async Task<HealthCheckResult> CheckHealthAsync(
+    public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            // For mock adapter, always healthy
-            // For real adapters, could ping their API
-            return await Task.FromResult(HealthCheckResult.Healthy("Payment gateway is responsive"));
+            var defaultGateway = _gateways.ResolveDefault();
+
+            var data = new Dictionary<string, object>
+            {
+                ["default"] = defaultGateway.Provider,
+                ["registered"] = _gateways.SupportedProviders
+            };
+
+            return Task.FromResult(HealthCheckResult.Healthy(
+                $"Default gateway '{defaultGateway.Provider}'; registered: {string.Join(", ", _gateways.SupportedProviders)}",
+                data));
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Payment gateway is not responsive", ex);
+            return Task.FromResult(HealthCheckResult.Unhealthy("Payment gateway configuration is invalid", ex));
         }
     }
 }

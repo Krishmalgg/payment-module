@@ -1,7 +1,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PaymentModule.Application.Common.Interfaces;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace PaymentModule.Application.Features.Payments.Queries.GetStoredCards;
@@ -30,18 +29,19 @@ public class GetStoredCardsQueryHandler : IRequestHandler<GetStoredCardsQuery, L
                 CardHolderName = x.CardHolderName,
                 CardNo = MaskCardNumber(x.CardNo), // Ensure we don't return full number if it was raw, but here it's decrypted
                 CardExpiry = x.CardExpiry,
-                CardType = x.CardType,
-                CustomerToken = x.CustomerToken
+                Brand = x.CardType,
+                Token = x.CustomerToken
             })
             .ToListAsync(cancellationToken);
-        _logger.LogInformation("Fetched {Count} stored cards for UserId {UserId}: {Cards}", cards.Count, request.UserId, JsonSerializer.Serialize(cards));
+        // Never log the DTOs themselves — they carry chargeable provider tokens.
+        _logger.LogInformation("Fetched {Count} stored cards for UserId {UserId}", cards.Count, request.UserId);
 
         return cards;
     }
 
     private static string MaskCardNumber(string cardNo)
     {
-        // If the card number is already masked (e.g. from PayHere), return as is
+        // If the provider already returned a masked number, leave it alone
         if (cardNo.Contains('*')) return cardNo;
         
         // Otherwise mask all but last 4

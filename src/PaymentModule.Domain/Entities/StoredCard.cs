@@ -3,7 +3,7 @@ using PaymentModule.Domain.Common;
 namespace PaymentModule.Domain.Entities;
 
 /// <summary>
-/// Represents a card stored via PayHere Preapproval.
+/// Represents a card tokenised by a payment provider for reuse.
 /// </summary>
 public class StoredCard : BaseEntity
 {

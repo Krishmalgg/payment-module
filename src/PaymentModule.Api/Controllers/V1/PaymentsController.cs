@@ -28,7 +28,7 @@ public class PaymentsController : ControllerBase
     [HttpPost("initiate")]
     public async Task<IActionResult> CreateIntent(
         [FromBody] JsonElement body,
-        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+        [FromHeader(Name = "x-idempotency-key")] string? idempotencyKey,
         CancellationToken ct)
     {
         // Support two body shapes:
@@ -113,9 +113,9 @@ public class PaymentsController : ControllerBase
 
         try
         {
-            var payloadJson = JsonSerializer.Serialize(request);
-            Console.WriteLine($"[PaymentsController] Incoming refund payload: {payloadJson}");
-            _logger.LogInformation("Received refund request payload: {Payload}", payloadJson);
+            _logger.LogInformation(
+                "Received refund request. RefundId={RefundId} TransactionId={TransactionId} Amount={Amount}",
+                request.RefundId, request.TransactionId, request.Amount?.ToString() ?? "FULL");
 
             if (string.IsNullOrEmpty(request.RefundId))
             {
@@ -138,7 +138,9 @@ public class PaymentsController : ControllerBase
                 request.OrderId,
                 request.TransactionId,
                 request.Reason,
-                request.UserId
+                request.UserId,
+                request.Amount,
+                request.Provider
             );
 
             var result = await _mediator.Send(command, ct);

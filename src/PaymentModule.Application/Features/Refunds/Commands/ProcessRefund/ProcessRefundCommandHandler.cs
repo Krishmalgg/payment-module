@@ -13,16 +13,16 @@ namespace PaymentModule.Application.Features.Refunds.Commands.ProcessRefund;
 public class ProcessRefundCommandHandler : IRequestHandler<ProcessRefundCommand, RefundResultDto>
 {
     private readonly IApplicationDbContext _context;
-    private readonly IPaymentGateway _paymentGateway;
+    private readonly IPaymentGatewayResolver _gateways;
     private readonly ILogger<ProcessRefundCommandHandler> _logger;
 
     public ProcessRefundCommandHandler(
         IApplicationDbContext context,
-        IPaymentGateway paymentGateway,
+        IPaymentGatewayResolver gateways,
         ILogger<ProcessRefundCommandHandler> logger)
     {
         _context = context;
-        _paymentGateway = paymentGateway;
+        _gateways = gateways;
         _logger = logger;
     }
 
@@ -188,7 +188,7 @@ public class ProcessRefundCommandHandler : IRequestHandler<ProcessRefundCommand,
         refund.MarkAsProcessing();
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 4. Call PayHere with retry logic
+        // 4. Call the gateway with retry logic
         var retryPolicy = Policy
             .Handle<Exception>()
             .WaitAndRetryAsync(
@@ -208,6 +208,35 @@ public class ProcessRefundCommandHandler : IRequestHandler<ProcessRefundCommand,
                 }
             );
 
+        // Route to the gateway that originally processed this transaction, so a refund
+        // always goes back to the same provider even after the default changes.
+        var gateway = _gateways.Resolve(request.Provider ?? transaction.Provider);
+
+        // Null amount = full refund. A partial amount may not exceed the original.
+        var refundAmount = request.Amount;
+        if (refundAmount is { } requested)
+        {
+            if (requested <= 0)
+            {
+                return new RefundResultDto(
+                    IsSuccess: false,
+                    RefundId: request.RefundId,
+                    Status: RefundStatus.Failed,
+                    ErrorMessage: "amount must be greater than zero"
+                );
+            }
+
+            if (requested > transaction.Amount)
+            {
+                return new RefundResultDto(
+                    IsSuccess: false,
+                    RefundId: request.RefundId,
+                    Status: RefundStatus.Failed,
+                    ErrorMessage: $"amount {requested} exceeds the transaction amount {transaction.Amount}"
+                );
+            }
+        }
+
         PaymentModule.Domain.ValueObjects.RefundResult? payHereResponse = null;
         Exception? lastException = null;
 
@@ -215,23 +244,24 @@ public class ProcessRefundCommandHandler : IRequestHandler<ProcessRefundCommand,
         {
             payHereResponse = await retryPolicy.ExecuteAsync(async () =>
             {
-                _logger.LogInformation("Attempting PayHere refund for ProviderRefId: {ProviderRefId}, Amount: {Amount} {Currency}",
-                    transaction.ProviderRefId, transaction.Amount, transaction.Currency);
+                _logger.LogInformation(
+                    "Attempting {Provider} refund for ProviderRefId: {ProviderRefId}, Amount: {Amount} {Currency}",
+                    gateway.Provider, transaction.ProviderRefId, refundAmount?.ToString() ?? "FULL", transaction.Currency);
 
-                var response = await _paymentGateway.RefundAsync(
+                var response = await gateway.RefundAsync(
                     transaction.ProviderRefId!,
-                    transaction.Amount,
+                    refundAmount,
                     transaction.Currency,
                     request.Reason,
                     cancellationToken);
 
-                _logger.LogInformation("PayHere refund response: IsSuccess={IsSuccess}, Status={Status}, Error={Error}",
-                    response.IsSuccess, response.Status, response.ErrorMessage);
+                _logger.LogInformation("{Provider} refund response: IsSuccess={IsSuccess}, Status={Status}, Error={Error}",
+                    gateway.Provider, response.IsSuccess, response.Status, response.ErrorMessage);
 
                 // Throw exception if response indicates failure to trigger retry
                 if (!response.IsSuccess && !string.IsNullOrEmpty(response.ErrorMessage))
                 {
-                    throw new Exception($"PayHere refund failed: {response.ErrorMessage}");
+                    throw new Exception($"{gateway.Provider} refund failed: {response.ErrorMessage}");
                 }
 
                 return response;

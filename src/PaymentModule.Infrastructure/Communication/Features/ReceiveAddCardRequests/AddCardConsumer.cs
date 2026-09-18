@@ -68,13 +68,11 @@ public class AddCardConsumer : RabbitMqBaseConsumer
                     payload = new
                     {
                         result.Success,
-                        result.MerchantId,
+                        result.Provider,
+                        result.Action,
                         result.OrderId,
-                        result.Currency,
-                        result.Hash,
-                        result.NotifyUrl,
-                        result.PreapprovalUrl,
-                        result.Amount
+                        result.Url,
+                        result.Fields
                     }
                 };
                 var responsePayload = JsonSerializer.Serialize(envelope, new JsonSerializerOptions

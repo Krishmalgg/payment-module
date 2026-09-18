@@ -23,9 +23,7 @@ public static class PayHereSecurity
     /// </summary>
     public static string GeneratePreapprovalHash(string merchantId, string orderId, string currency, string amount, string merchantSecret)
     {
-        Console.WriteLine($"Generating preapproval hash for merchantId: {merchantId}, orderId: {orderId}, currency: {currency}, amount: {amount}, merchantSecret: {merchantSecret}");
         var secretHash = GetMd5Hash(merchantSecret).ToUpperInvariant();
-        Console.WriteLine($"Secret Hash: {secretHash}");
         var signatureSource = merchantId + orderId + amount + currency + secretHash;
         return GetMd5Hash(signatureSource).ToUpperInvariant();
     }
@@ -35,19 +33,48 @@ public static class PayHereSecurity
     /// md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + md5(merchant_secret))
     /// </summary>
     public static bool VerifyNotificationSignature(
-        string merchantId, 
-        string orderId, 
-        string payhereAmount, 
-        string payhereCurrency, 
-        string statusCode, 
-        string merchantSecret, 
+        string merchantId,
+        string orderId,
+        string payhereAmount,
+        string payhereCurrency,
+        string statusCode,
+        string merchantSecret,
         string remoteSignature)
+    {
+        var localSignature = GenerateNotificationSignature(
+            merchantId, orderId, payhereAmount, payhereCurrency, statusCode, merchantSecret);
+
+        return FixedTimeEquals(localSignature, remoteSignature);
+    }
+
+    /// <summary>
+    /// Computes the signature PayHere sends as md5sig on a notification.
+    /// md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + md5(merchant_secret))
+    /// </summary>
+    public static string GenerateNotificationSignature(
+        string merchantId,
+        string orderId,
+        string payhereAmount,
+        string payhereCurrency,
+        string statusCode,
+        string merchantSecret)
     {
         var secretHash = GetMd5Hash(merchantSecret).ToUpperInvariant();
         var signatureSource = merchantId + orderId + payhereAmount + payhereCurrency + statusCode + secretHash;
-        var localSignature = GetMd5Hash(signatureSource).ToUpperInvariant();
+        return GetMd5Hash(signatureSource).ToUpperInvariant();
+    }
 
-        return string.Equals(localSignature, remoteSignature, StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Compares two hex signatures without leaking their contents through timing.
+    /// </summary>
+    private static bool FixedTimeEquals(string expected, string provided)
+    {
+        if (string.IsNullOrEmpty(provided)) return false;
+
+        var expectedBytes = Encoding.ASCII.GetBytes(expected.ToUpperInvariant());
+        var providedBytes = Encoding.ASCII.GetBytes(provided.Trim().ToUpperInvariant());
+
+        return CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
     }
 
     private static string GetMd5Hash(string input)
