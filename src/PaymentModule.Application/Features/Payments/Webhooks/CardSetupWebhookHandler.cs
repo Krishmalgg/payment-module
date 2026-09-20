@@ -1,63 +1,39 @@
-using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PaymentModule.Application.Common.Interfaces;
 using PaymentModule.Domain.Enums;
 using PaymentModule.Domain.Ports;
 
-namespace PaymentModule.Application.Features.Payments.Commands.ProcessCardSetupWebhook;
+namespace PaymentModule.Application.Features.Payments.Webhooks;
 
 /// <summary>
-/// A card-tokenisation notification received from any gateway.
+/// Activates a StoredCard once a provider confirms tokenisation succeeded.
 /// </summary>
-public record ProcessCardSetupWebhookCommand(
-    string? Provider,
-    string Payload,
-    IDictionary<string, string>? Headers = null
-) : IRequest<object>;
-
-/// <summary>
-/// Activates a StoredCard once the provider confirms tokenisation succeeded.
-/// </summary>
-public class ProcessCardSetupWebhookCommandHandler
-    : IRequestHandler<ProcessCardSetupWebhookCommand, object>
+public class CardSetupWebhookHandler : IWebhookEventHandler
 {
-    private readonly IPaymentGatewayResolver _gateways;
     private readonly IApplicationDbContext _dbContext;
-    private readonly ILogger<ProcessCardSetupWebhookCommandHandler> _logger;
+    private readonly ILogger<CardSetupWebhookHandler> _logger;
 
-    public ProcessCardSetupWebhookCommandHandler(
-        IPaymentGatewayResolver gateways,
+    public WebhookEventType EventType => WebhookEventType.CardSetup;
+
+    public CardSetupWebhookHandler(
         IApplicationDbContext dbContext,
-        ILogger<ProcessCardSetupWebhookCommandHandler> logger)
+        ILogger<CardSetupWebhookHandler> logger)
     {
-        _gateways = gateways;
         _dbContext = dbContext;
         _logger = logger;
     }
 
-    public async Task<object> Handle(ProcessCardSetupWebhookCommand request, CancellationToken ct)
+    public async Task<object> HandleAsync(WebhookResult result, string provider, CancellationToken ct)
     {
-        var gateway = _gateways.Resolve(request.Provider);
-
-        var result = await gateway.HandleWebhook(
-            request.Payload,
-            request.Headers ?? new Dictionary<string, string>(),
-            ct);
-
-        if (string.IsNullOrEmpty(result.OrderId))
-        {
-            _logger.LogError("Card setup webhook from {Provider} could not be parsed: {Error}",
-                gateway.Provider, result.ErrorMessage);
-            return new { status = "error", message = result.ErrorMessage ?? "Invalid payload" };
-        }
-
         var storedCard = await _dbContext.StoredCards
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(c => c.OrderId == result.OrderId, ct);
 
         if (storedCard is null)
         {
+            // Unlike payments there is no create-on-the-fly path here: a card can only
+            // be activated against a setup we ourselves started.
             _logger.LogWarning("StoredCard not found for OrderId {OrderId}.", result.OrderId);
             return new { status = "error", message = "Record not found" };
         }
@@ -71,7 +47,7 @@ public class ProcessCardSetupWebhookCommandHandler
         if (!result.SignatureValid)
         {
             _logger.LogError("[SECURITY] Signature verification FAILED for {Provider} card setup {OrderId}.",
-                gateway.Provider, result.OrderId);
+                provider, result.OrderId);
             storedCard.MarkAsFailed();
             await _dbContext.SaveChangesAsync(ct);
             return new { status = "error", message = "Signature mismatch" };

@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PaymentModule.Domain.Exceptions;
 using PaymentModule.Domain.Ports;
-using PaymentModule.Infrastructure.Configuration;
+using PaymentModule.Application.Common.Configuration;
 
 namespace PaymentModule.Infrastructure.Gateways;
 

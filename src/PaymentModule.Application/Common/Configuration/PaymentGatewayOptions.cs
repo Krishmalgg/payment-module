@@ -1,7 +1,11 @@
-namespace PaymentModule.Infrastructure.Configuration;
+namespace PaymentModule.Application.Common.Configuration;
 
 /// <summary>
 /// Binds the "PaymentGateway" configuration section.
+///
+/// Lives in the Application layer because it expresses business policy (which provider
+/// and which currencies this deployment accepts), not an infrastructure detail — the
+/// request validator needs it and cannot reference Infrastructure.
 /// </summary>
 public class PaymentGatewayOptions
 {

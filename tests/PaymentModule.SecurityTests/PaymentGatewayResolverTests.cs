@@ -4,7 +4,7 @@ using PaymentModule.Domain.Enums;
 using PaymentModule.Domain.Exceptions;
 using PaymentModule.Domain.Ports;
 using PaymentModule.Domain.ValueObjects;
-using PaymentModule.Infrastructure.Configuration;
+using PaymentModule.Application.Common.Configuration;
 using PaymentModule.Infrastructure.Gateways;
 using Xunit;
 

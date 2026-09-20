@@ -115,7 +115,7 @@ builder.Services.Configure<PaymentModule.Infrastructure.Configuration.OutboxProc
 // Payment gateway adapters.
 // ALL adapters are registered; the provider is chosen per request by the resolver,
 // falling back to PaymentGateway:Provider. Adding a gateway = add one line here.
-builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PaymentGatewayOptions>(
+builder.Services.Configure<PaymentModule.Application.Common.Configuration.PaymentGatewayOptions>(
     builder.Configuration.GetSection("PaymentGateway"));
 builder.Services.Configure<PaymentModule.Infrastructure.Configuration.PayHereOptions>(
     builder.Configuration.GetSection("PayHere"));
@@ -150,6 +150,14 @@ builder.Services.AddScoped<PaymentModule.Application.Common.Interfaces.IOutboxRe
 builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.SequentialOutboxProcessingStrategy>();
 builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.ParallelOutboxProcessingStrategy>();
 builder.Services.AddScoped<PaymentModule.Infrastructure.Communication.Core.Outbox.DistributedMultithreadedOutboxProcessingStrategy>();
+
+// Webhook event handlers — each declares the WebhookEventType it serves, and the
+// dispatcher (ProcessWebhookCommandHandler) routes to them by that type rather than
+// by URL. Adding refund webhooks means adding one class and one line here.
+builder.Services.AddScoped<PaymentModule.Application.Features.Payments.Webhooks.IWebhookEventHandler,
+    PaymentModule.Application.Features.Payments.Webhooks.PaymentWebhookHandler>();
+builder.Services.AddScoped<PaymentModule.Application.Features.Payments.Webhooks.IWebhookEventHandler,
+    PaymentModule.Application.Features.Payments.Webhooks.CardSetupWebhookHandler>();
 
 // Feature-Specific Notifiers
 builder.Services.AddScoped<PaymentModule.Application.Features.Payments.Interfaces.IPaymentStatusNotifier, 

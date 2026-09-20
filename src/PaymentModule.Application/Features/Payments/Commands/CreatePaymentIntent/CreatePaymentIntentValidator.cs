@@ -1,11 +1,20 @@
 using FluentValidation;
+using Microsoft.Extensions.Options;
+using PaymentModule.Application.Common.Configuration;
 
 namespace PaymentModule.Application.Features.Payments.Commands.CreatePaymentIntent;
 
 public class CreatePaymentIntentValidator : AbstractValidator<CreatePaymentIntentCommand>
 {
-    public CreatePaymentIntentValidator()
+    private readonly string[] _acceptedCurrencies;
+
+    public CreatePaymentIntentValidator(IOptions<PaymentGatewayOptions> options)
     {
+        // Accepted currencies are deployment policy, not a constant. Read them from
+        // PaymentGateway:AcceptedCurrencies so adding a provider with different
+        // currency support needs no Application-layer edit.
+        _acceptedCurrencies = options.Value.AcceptedCurrencies ?? [];
+
         RuleFor(x => x.Amount)
             .GreaterThan(0)
             .WithMessage("Amount must be greater than zero");
@@ -18,18 +27,27 @@ public class CreatePaymentIntentValidator : AbstractValidator<CreatePaymentInten
             .NotEmpty()
             .WithMessage("Currency is required");
 
-        RuleFor(x => x.Currency)
-            .Must(BeValidCurrency)
-            .WithMessage("Currency must be a valid ISO 4217 code (e.g., LKR, USD, EUR)")
-            .When(x => !string.IsNullOrWhiteSpace(x.Currency));
+        // Format and policy are separate questions: "JPY" is a perfectly valid ISO 4217
+        // code that this deployment may still not accept. Reporting them with the same
+        // message makes the second case confusing to debug.
+        When(x => !string.IsNullOrWhiteSpace(x.Currency), () =>
+        {
+            RuleFor(x => x.Currency)
+                .Must(BeIso4217Shaped)
+                .WithMessage("Currency must be a three-letter ISO 4217 code (e.g., LKR, USD, EUR)");
+
+            RuleFor(x => x.Currency)
+                .Must(BeAccepted)
+                .When(x => BeIso4217Shaped(x.Currency))
+                .WithMessage(_ => $"Currency is not accepted by this deployment. Accepted: {string.Join(", ", _acceptedCurrencies)}");
+        });
     }
 
-    private bool BeValidCurrency(string currency)
-    {
-        if (string.IsNullOrWhiteSpace(currency))
-            return false;
+    private static bool BeIso4217Shaped(string currency) =>
+        !string.IsNullOrWhiteSpace(currency)
+        && currency.Length == 3
+        && currency.All(char.IsLetter);
 
-        var validCurrencies = new[] { "LKR", "USD", "EUR", "GBP", "INR", "AUD", "CAD" };
-        return validCurrencies.Contains(currency.ToUpperInvariant());
-    }
+    private bool BeAccepted(string currency) =>
+        _acceptedCurrencies.Contains(currency.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
 }

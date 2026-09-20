@@ -1,4 +1,3 @@
-using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PaymentModule.Application.Common.Interfaces;
@@ -6,51 +5,30 @@ using PaymentModule.Domain.Entities;
 using PaymentModule.Domain.Enums;
 using PaymentModule.Domain.Ports;
 
-namespace PaymentModule.Application.Features.Payments.Commands.ProcessGatewayWebhook;
+namespace PaymentModule.Application.Features.Payments.Webhooks;
 
 /// <summary>
-/// Applies a payment notification from any gateway to our Transaction record.
+/// Applies a payment notification to the Transaction record.
 ///
-/// This handler knows nothing about any provider: it reads a verified, already-translated
-/// <see cref="WebhookResult"/> and acts on the domain status alone.
+/// Knows nothing about any provider: it acts on the domain status alone.
 /// </summary>
-public class ProcessGatewayWebhookCommandHandler : IRequestHandler<ProcessGatewayWebhookCommand, object>
+public class PaymentWebhookHandler : IWebhookEventHandler
 {
-    private readonly IPaymentGatewayResolver _gateways;
     private readonly IApplicationDbContext _dbContext;
-    private readonly ILogger<ProcessGatewayWebhookCommandHandler> _logger;
+    private readonly ILogger<PaymentWebhookHandler> _logger;
 
-    public ProcessGatewayWebhookCommandHandler(
-        IPaymentGatewayResolver gateways,
+    public WebhookEventType EventType => WebhookEventType.Payment;
+
+    public PaymentWebhookHandler(
         IApplicationDbContext dbContext,
-        ILogger<ProcessGatewayWebhookCommandHandler> logger)
+        ILogger<PaymentWebhookHandler> logger)
     {
-        _gateways = gateways;
         _dbContext = dbContext;
         _logger = logger;
     }
 
-    public async Task<object> Handle(ProcessGatewayWebhookCommand request, CancellationToken ct)
+    public async Task<object> HandleAsync(WebhookResult result, string provider, CancellationToken ct)
     {
-        var gateway = _gateways.Resolve(request.Provider);
-
-        var result = await gateway.HandleWebhook(
-            request.Payload,
-            request.Headers ?? new Dictionary<string, string>(),
-            ct);
-
-        if (string.IsNullOrEmpty(result.OrderId))
-        {
-            _logger.LogError("Webhook from {Provider} could not be parsed: {Error}",
-                gateway.Provider, result.ErrorMessage);
-            return new { status = "error", message = result.ErrorMessage ?? "Invalid payload" };
-        }
-
-        _logger.LogInformation(
-            "Webhook parsed. Provider={Provider} OrderId={OrderId} SignatureValid={Valid} Status={Status} (raw={Raw}) Amount={Amount} {Currency} Ref={Ref}",
-            gateway.Provider, result.OrderId, result.SignatureValid, result.Status,
-            result.RawStatus, result.Amount, result.Currency, result.ProviderReference);
-
         var transaction = await _dbContext.Transactions
             .FirstOrDefaultAsync(t => t.OrderId == result.OrderId, ct);
 
@@ -72,6 +50,16 @@ public class ProcessGatewayWebhookCommandHandler : IRequestHandler<ProcessGatewa
             }
         }
 
+        // An unverified payload must never be able to CREATE a record — that would let
+        // anyone who can reach this endpoint populate our database with transactions.
+        if (transaction is null && !result.SignatureValid)
+        {
+            _logger.LogError(
+                "[SECURITY] Unverified {Provider} webhook for unknown order {OrderId}. Discarding.",
+                provider, result.OrderId);
+            return new { status = "error", message = "Signature verification failed" };
+        }
+
         // --- Resiliency fallback: the notification beat our own pre-persistence ---
         var isNew = false;
         if (transaction is null)
@@ -88,7 +76,7 @@ public class ProcessGatewayWebhookCommandHandler : IRequestHandler<ProcessGatewa
                 userId,
                 result.Amount ?? 0m,
                 result.Currency ?? "LKR",
-                gateway.Provider.ToUpperInvariant(),
+                provider.ToUpperInvariant(),
                 result.Card?.HolderName ?? "Webhook Customer",
                 result.Meta.GetValueOrDefault("email"));
 
@@ -101,7 +89,7 @@ public class ProcessGatewayWebhookCommandHandler : IRequestHandler<ProcessGatewa
         if (!result.SignatureValid)
         {
             _logger.LogError("[SECURITY] Signature verification FAILED for {Provider} order {OrderId}.",
-                gateway.Provider, result.OrderId);
+                provider, result.OrderId);
             transaction.MarkAsSuspicious("Webhook signature verification failed");
         }
         else
@@ -130,7 +118,7 @@ public class ProcessGatewayWebhookCommandHandler : IRequestHandler<ProcessGatewa
                 default:
                     _logger.LogWarning(
                         "Unmapped status from {Provider} for order {OrderId} (raw={Raw}). Leaving unchanged.",
-                        gateway.Provider, result.OrderId, result.RawStatus);
+                        provider, result.OrderId, result.RawStatus);
                     break;
             }
         }

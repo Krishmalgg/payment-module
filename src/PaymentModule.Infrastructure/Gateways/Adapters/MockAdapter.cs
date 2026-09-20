@@ -147,8 +147,13 @@ public class MockAdapter : IPaymentGateway
         foreach (var p in payload.Split('&'))
         {
             var kv = p.Split('=', 2);
-            var key = Uri.UnescapeDataString(kv[0] ?? "");
-            var val = kv.Length == 2 ? Uri.UnescapeDataString(kv[1]) : "";
+
+            // WebUtility.UrlDecode (not Uri.UnescapeDataString) because this is
+            // application/x-www-form-urlencoded, where a space is '+' and a literal
+            // plus is '%2B'. Uri.UnescapeDataString leaves '+' alone, which would
+            // silently corrupt names and e-mail addresses.
+            var key = System.Net.WebUtility.UrlDecode(kv[0] ?? "");
+            var val = kv.Length == 2 ? System.Net.WebUtility.UrlDecode(kv[1]) : "";
             if (!string.IsNullOrEmpty(key)) dict[key] = val;
         }
         return dict;
